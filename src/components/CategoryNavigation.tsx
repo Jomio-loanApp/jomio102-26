@@ -3,10 +3,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
 interface Category {
-  id: string
+  category_id: string
   name: string
   image_url: string | null
-  sort_order: number | null
 }
 
 interface CategoryNavigationProps {
@@ -27,11 +26,11 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
       setIsLoading(true)
       console.log('Fetching categories...')
       
+      // Fixed query - removing non-existent columns is_active and sort_order
       const { data, error } = await supabase
         .from('categories')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true })
+        .select('category_id, name, image_url')
+        .order('name', { ascending: true })
 
       console.log('Categories query result:', { data, error })
 
@@ -83,14 +82,14 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
 
       {categories.map((category) => (
         <button
-          key={category.id}
-          onClick={() => onCategorySelect(category.id)}
+          key={category.category_id}
+          onClick={() => onCategorySelect(category.category_id)}
           className={`flex flex-col items-center space-y-2 min-w-[80px] transition-colors ${
-            selectedCategory === category.id ? 'text-green-600' : 'text-gray-600'
+            selectedCategory === category.category_id ? 'text-green-600' : 'text-gray-600'
           }`}
         >
           <div className={`w-16 h-16 rounded-full border-2 overflow-hidden ${
-            selectedCategory === category.id 
+            selectedCategory === category.category_id 
               ? 'border-green-600' 
               : 'border-gray-200'
           }`}>

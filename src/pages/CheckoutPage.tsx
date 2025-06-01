@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { MapPin, Clock, CreditCard, FileText, ShoppingBag } from 'lucide-react'
+import { MapPin, Clock, CreditCard, ShoppingBag } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 interface DeliveryOption {
@@ -53,12 +53,14 @@ const CheckoutPage = () => {
   const [minimumOrderValue, setMinimumOrderValue] = useState(0)
   
   // UI states
-  const [currentStep, setCurrentStep] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
   useEffect(() => {
+    console.log('CheckoutPage: Component mounted, cart items:', items.length)
+    
     if (items.length === 0) {
+      console.log('CheckoutPage: No items in cart, redirecting to cart page')
       navigate('/cart')
       return
     }
@@ -72,7 +74,13 @@ const CheckoutPage = () => {
   }, [user, profile, items.length, navigate])
 
   useEffect(() => {
-    if (deliveryLat && deliveryLng && selectedDeliveryOption) {
+    console.log('CheckoutPage: Location or delivery option changed', {
+      deliveryLat,
+      deliveryLng,
+      selectedDeliveryOption
+    })
+    
+    if (deliveryLat && deliveryLng) {
       fetchDeliveryOptions()
       if (selectedDeliveryOption === 'instant') {
         calculateDeliveryCharge()
@@ -82,15 +90,22 @@ const CheckoutPage = () => {
 
   const fetchShopSettings = async () => {
     try {
+      console.log('CheckoutPage: Fetching shop settings...')
       const { data, error } = await supabase
         .from('shop_settings')
         .select('minimum_order_value')
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('CheckoutPage: Error fetching shop settings:', error)
+        throw error
+      }
+      
+      console.log('CheckoutPage: Shop settings fetched:', data)
       setMinimumOrderValue(data?.minimum_order_value || 0)
     } catch (error) {
       console.error('Error fetching shop settings:', error)
+      setMinimumOrderValue(0)
     }
   }
 
@@ -98,33 +113,48 @@ const CheckoutPage = () => {
     if (!user) return
 
     try {
+      console.log('CheckoutPage: Fetching saved addresses for user:', user.id)
       const { data, error } = await supabase
         .from('addresses')
         .select('*')
         .eq('profile_id', user.id)
         .order('is_default', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('CheckoutPage: Error fetching addresses:', error)
+        throw error
+      }
+      
+      console.log('CheckoutPage: Saved addresses fetched:', data)
       setSavedAddresses(data || [])
     } catch (error) {
       console.error('Error fetching addresses:', error)
+      setSavedAddresses([])
     }
   }
 
   const fetchDeliveryOptions = async () => {
     try {
+      console.log('CheckoutPage: Fetching delivery options...')
       const { data, error } = await supabase.functions.invoke('get-available-delivery-options')
       
-      if (error) throw error
+      if (error) {
+        console.error('CheckoutPage: Error fetching delivery options:', error)
+        throw error
+      }
+      
+      console.log('CheckoutPage: Delivery options fetched:', data)
       setDeliveryOptions(data || [])
     } catch (error) {
       console.error('Error fetching delivery options:', error)
       // Fallback options
-      setDeliveryOptions([
+      const fallbackOptions = [
         { type: 'instant', label: 'Instant Delivery (30-45 min)', charge: 0 },
         { type: 'morning', label: 'Morning Delivery (Tomorrow 7 AM - 9 AM)', charge: 0 },
         { type: 'evening', label: 'Evening Delivery (Tomorrow 6 PM - 8 PM)', charge: 0 },
-      ])
+      ]
+      console.log('CheckoutPage: Using fallback delivery options:', fallbackOptions)
+      setDeliveryOptions(fallbackOptions)
     }
   }
 
@@ -132,33 +162,42 @@ const CheckoutPage = () => {
     if (!deliveryLat || !deliveryLng) return
 
     try {
+      console.log('CheckoutPage: Calculating delivery charge for location:', { deliveryLat, deliveryLng })
       const { data, error } = await supabase.functions.invoke('calculate-delivery-charge', {
         body: { p_customer_lat: deliveryLat, p_customer_lon: deliveryLng }
       })
       
-      if (error) throw error
+      if (error) {
+        console.error('CheckoutPage: Error calculating delivery charge:', error)
+        throw error
+      }
+      
+      console.log('CheckoutPage: Delivery charge calculated:', data)
       setDeliveryCharge(data?.delivery_charge || 0)
     } catch (error) {
       console.error('Error calculating delivery charge:', error)
-      setDeliveryCharge(20) // Fallback charge
+      const fallbackCharge = 20
+      console.log('CheckoutPage: Using fallback delivery charge:', fallbackCharge)
+      setDeliveryCharge(fallbackCharge) // Fallback charge
     }
   }
 
   const handleLocationSelect = (lat: number, lng: number, locationName: string) => {
-    console.log('Location selected:', { lat, lng, locationName })
+    console.log('CheckoutPage: Location selected:', { lat, lng, locationName })
     setDeliveryLat(lat)
     setDeliveryLng(lng)
     setDeliveryLocationName(locationName)
   }
 
   const selectSavedAddress = (address: Address) => {
-    console.log('Saved address selected:', address)
+    console.log('CheckoutPage: Saved address selected:', address)
     setDeliveryLat(address.latitude)
     setDeliveryLng(address.longitude)
     setDeliveryLocationName(address.location_name)
   }
 
   const handlePlaceOrder = async () => {
+    console.log('CheckoutPage: Placing order...')
     setIsPlacingOrder(true)
 
     try {
@@ -183,19 +222,27 @@ const CheckoutPage = () => {
         total_amount: getSubtotal() + (selectedDeliveryOption === 'instant' ? deliveryCharge : 0),
       }
 
+      console.log('CheckoutPage: Order data prepared:', orderData)
+
       let result
       if (user) {
+        console.log('CheckoutPage: User is authenticated, creating authenticated order')
         // TODO: Call create-authenticated-order function when available
-        // For now, show success message
-        result = { data: { order_id: 'temp_' + Date.now() } }
+        // For now, simulate successful order creation
+        result = { data: { order_id: 'temp_auth_' + Date.now() } }
       } else {
+        console.log('CheckoutPage: User is guest, creating guest order')
         result = await supabase.functions.invoke('create-guest-order', {
           body: orderData
         })
       }
 
-      if (result.error) throw result.error
+      if (result.error) {
+        console.error('CheckoutPage: Order creation failed:', result.error)
+        throw result.error
+      }
 
+      console.log('CheckoutPage: Order created successfully:', result.data)
       clearCart()
       navigate(`/order-confirmation/${result.data.order_id}`)
       
@@ -220,7 +267,18 @@ const CheckoutPage = () => {
   const totalAmount = subtotal + finalDeliveryCharge
   const canProceed = subtotal >= minimumOrderValue
 
-  if (!canProceed) {
+  console.log('CheckoutPage: Render state:', {
+    itemsCount: items.length,
+    subtotal,
+    minimumOrderValue,
+    canProceed,
+    deliveryLat,
+    deliveryLng,
+    selectedDeliveryOption,
+    deliveryOptionsCount: deliveryOptions.length
+  })
+
+  if (!canProceed && subtotal > 0) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header showSearch={false} />
@@ -332,7 +390,7 @@ const CheckoutPage = () => {
             </Card>
 
             {/* Step 3: Delivery Options */}
-            {deliveryLat && deliveryLng && (
+            {deliveryLat && deliveryLng && deliveryOptions.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">

@@ -11,10 +11,11 @@ export type Database = {
     Tables: {
       products: {
         Row: {
-          id: string
+          product_id: string
           name: string
           description: string | null
           price_string: string
+          numeric_price: number
           unit_type: string
           image_url: string | null
           category_id: string | null
@@ -26,11 +27,9 @@ export type Database = {
       }
       categories: {
         Row: {
-          id: string
+          category_id: string
           name: string
           image_url: string | null
-          sort_order: number | null
-          is_active: boolean
           created_at: string
           updated_at: string
         }

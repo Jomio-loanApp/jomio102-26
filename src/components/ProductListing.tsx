@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Product {
-  id: string
+  product_id: string
   name: string
   description: string | null
   price_string: string
   unit_type: string
   image_url: string | null
-  tags?: Array<{ name: string }>
+  category_id: string | null
+  availability_status: string
+  is_active: boolean
 }
 
 interface ProductListingProps {
@@ -42,14 +44,14 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
       setIsLoading(true)
       console.log('Fetching products with categoryId:', categoryId, 'searchQuery:', searchQuery)
       
-      // First, let's try a simple query to see the table structure
+      // Using correct schema - product_id instead of id
       let query = supabase
         .from('products')
         .select('*', { count: 'exact' })
         .eq('is_active', true)
         .neq('availability_status', 'Out of Stock')
 
-      // Apply category filter
+      // Apply category filter using correct column name
       if (categoryId) {
         query = query.eq('category_id', categoryId)
       }
@@ -73,13 +75,7 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
         throw error
       }
 
-      // For now, just use the basic product data without tags
-      const transformedProducts = data?.map(product => ({
-        ...product,
-        tags: [] // We'll handle tags separately once the basic query works
-      })) || []
-
-      setProducts(transformedProducts)
+      setProducts(data || [])
       setTotalCount(count || 0)
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -139,7 +135,7 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
       {/* Products Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {products.map((product) => (
-          <ProductCard key={product.id} product={product} />
+          <ProductCard key={product.product_id} product={product} />
         ))}
       </div>
 

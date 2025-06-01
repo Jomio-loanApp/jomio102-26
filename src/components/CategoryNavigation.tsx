@@ -24,16 +24,26 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
 
   const fetchCategories = async () => {
     try {
+      setIsLoading(true)
+      console.log('Fetching categories...')
+      
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, image_url, sort_order')
+        .select('*')
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
 
-      if (error) throw error
+      console.log('Categories query result:', { data, error })
+
+      if (error) {
+        console.error('Categories fetch error:', error)
+        throw error
+      }
+      
       setCategories(data || [])
     } catch (error) {
       console.error('Error fetching categories:', error)
+      setCategories([])
     } finally {
       setIsLoading(false)
     }

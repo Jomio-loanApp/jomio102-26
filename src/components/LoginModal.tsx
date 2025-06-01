@@ -41,7 +41,9 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
     setIsLoading(true)
 
     try {
+      console.log('Starting login process...')
       await signIn(loginData.email, loginData.password)
+      console.log('Login successful')
       
       // Check if user has guest data to merge
       if (cartItems.length > 0 || wishlistItems.length > 0) {
@@ -54,12 +56,14 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
         })
       }
     } catch (error: any) {
+      console.error('Login error:', error)
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "An error occurred during login",
         variant: "destructive",
       })
     } finally {
+      console.log('Login process completed, resetting loading state')
       setIsLoading(false)
     }
   }
@@ -69,7 +73,9 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
     setIsLoading(true)
 
     try {
+      console.log('Starting signup process...')
       await signUp(signupData.email, signupData.password, signupData.fullName, signupData.phoneNumber)
+      console.log('Signup successful')
       
       // Check if user has guest data to merge
       if (cartItems.length > 0 || wishlistItems.length > 0) {
@@ -82,12 +88,14 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
         })
       }
     } catch (error: any) {
+      console.error('Signup error:', error)
       toast({
         title: "Signup failed",
-        description: error.message,
+        description: error.message || "An error occurred during signup",
         variant: "destructive",
       })
     } finally {
+      console.log('Signup process completed, resetting loading state')
       setIsLoading(false)
     }
   }
@@ -158,6 +166,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   required
                   value={loginData.email}
                   onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
+                  disabled={isLoading}
                 />
               </div>
               <div>
@@ -168,6 +177,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   required
                   value={loginData.password}
                   onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
+                  disabled={isLoading}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
@@ -186,6 +196,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   required
                   value={signupData.fullName}
                   onChange={(e) => setSignupData(prev => ({ ...prev, fullName: e.target.value }))}
+                  disabled={isLoading}
                 />
               </div>
               <div>
@@ -196,6 +207,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   required
                   value={signupData.phoneNumber}
                   onChange={(e) => setSignupData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                  disabled={isLoading}
                 />
               </div>
               <div>
@@ -206,6 +218,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   required
                   value={signupData.email}
                   onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
+                  disabled={isLoading}
                 />
               </div>
               <div>
@@ -216,6 +229,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   required
                   value={signupData.password}
                   onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
+                  disabled={isLoading}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>

@@ -40,20 +40,12 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
   const fetchProducts = async (page: number) => {
     try {
       setIsLoading(true)
+      console.log('Fetching products with categoryId:', categoryId, 'searchQuery:', searchQuery)
       
+      // First, let's try a simple query to see the table structure
       let query = supabase
         .from('products')
-        .select(`
-          id,
-          name,
-          description,
-          price_string,
-          unit_type,
-          image_url,
-          product_tags!inner(
-            tags!inner(name)
-          )
-        `, { count: 'exact' })
+        .select('*', { count: 'exact' })
         .eq('is_active', true)
         .neq('availability_status', 'Out of Stock')
 
@@ -74,12 +66,17 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
 
       const { data, error, count } = await query
 
-      if (error) throw error
+      console.log('Products query result:', { data, error, count })
 
-      // Transform the data to flatten tags
+      if (error) {
+        console.error('Products fetch error:', error)
+        throw error
+      }
+
+      // For now, just use the basic product data without tags
       const transformedProducts = data?.map(product => ({
         ...product,
-        tags: product.product_tags?.map((pt: any) => ({ name: pt.tags.name })) || []
+        tags: [] // We'll handle tags separately once the basic query works
       })) || []
 
       setProducts(transformedProducts)
@@ -87,6 +84,7 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
     } catch (error) {
       console.error('Error fetching products:', error)
       setProducts([])
+      setTotalCount(0)
     } finally {
       setIsLoading(false)
     }

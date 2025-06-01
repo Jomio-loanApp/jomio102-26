@@ -44,7 +44,7 @@ const WishlistPage = () => {
         .select(`
           id,
           product_id,
-          product:products!inner(
+          products!inner(
             id,
             name,
             price_string,
@@ -54,7 +54,15 @@ const WishlistPage = () => {
         .eq('profile_id', user!.id)
 
       if (error) throw error
-      setDbWishlist(data || [])
+      
+      // Transform the data to match our interface
+      const transformedData = data?.map(item => ({
+        id: item.id,
+        product_id: item.product_id,
+        product: Array.isArray(item.products) ? item.products[0] : item.products
+      })) || []
+      
+      setDbWishlist(transformedData)
     } catch (error) {
       console.error('Error fetching wishlist:', error)
     } finally {

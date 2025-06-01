@@ -64,7 +64,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
   const getCurrentLocation = () => {
     setIsLocating(true)
-    
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -81,7 +80,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 300000 // 5 minutes
+          maximumAge: 300000, // 5 minutes
         }
       )
     } else {
@@ -113,7 +112,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
           )}
           Use Current Location
         </Button>
-        
         <div className="flex-1 flex items-center text-sm text-gray-600">
           <MapPin className="w-4 h-4 mr-2" />
           Or click on the map
@@ -127,7 +125,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
           style={{ height: '100%', width: '100%' }}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <LocationMarker />

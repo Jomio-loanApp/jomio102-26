@@ -129,7 +129,17 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {products.map((product) => (
-          <ProductCard key={product.product_id} product={product} />
+          <ProductCard 
+            key={product.product_id} 
+            product={{
+              id: product.product_id,
+              name: product.name,
+              description: product.description,
+              price_string: product.price_string,
+              unit_type: product.unit_type,
+              image_url: product.image_url
+            }} 
+          />
         ))}
       </div>
 

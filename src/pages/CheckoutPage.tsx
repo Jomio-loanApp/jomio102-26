@@ -145,12 +145,14 @@ const CheckoutPage = () => {
   }
 
   const handleLocationSelect = (lat: number, lng: number, locationName: string) => {
+    console.log('Location selected:', { lat, lng, locationName })
     setDeliveryLat(lat)
     setDeliveryLng(lng)
     setDeliveryLocationName(locationName)
   }
 
   const selectSavedAddress = (address: Address) => {
+    console.log('Saved address selected:', address)
     setDeliveryLat(address.latitude)
     setDeliveryLng(address.longitude)
     setDeliveryLocationName(address.location_name)

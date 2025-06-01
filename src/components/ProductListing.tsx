@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ProductCard from './ProductCard'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface Product {
   product_id: string
@@ -27,6 +28,7 @@ const PRODUCTS_PER_PAGE = 12
 const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
 
@@ -42,6 +44,7 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
   const fetchProducts = async (page: number) => {
     try {
       setIsLoading(true)
+      setError(null)
       console.log('Fetching products with categoryId:', categoryId, 'searchQuery:', searchQuery)
       
       let query = supabase
@@ -73,8 +76,9 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
 
       setProducts(data || [])
       setTotalCount(count || 0)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching products:', error)
+      setError(error.message || 'Failed to load products')
       setProducts([])
       setTotalCount(0)
     } finally {
@@ -86,17 +90,43 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {[...Array(8)].map((_, index) => (
-          <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="aspect-square bg-gray-200 animate-pulse"></div>
-            <div className="p-4 space-y-2">
-              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-              <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4"></div>
-              <div className="h-6 bg-gray-200 rounded animate-pulse w-1/2"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-4 w-48" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, index) => (
+            <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
+              <Skeleton className="aspect-square w-full" />
+              <div className="p-4 space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-6 w-1/2" />
+              </div>
             </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+            <AlertCircle className="w-8 h-8 text-red-500" />
           </div>
-        ))}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Something went wrong
+            </h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <Button onClick={() => fetchProducts(currentPage)} variant="outline">
+              Try again
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -121,7 +151,7 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
           Showing {((currentPage - 1) * PRODUCTS_PER_PAGE) + 1} - {Math.min(currentPage * PRODUCTS_PER_PAGE, totalCount)} of {totalCount} products
           {searchQuery && ` for "${searchQuery}"`}
         </p>
@@ -150,20 +180,24 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
             disabled={currentPage === 1}
             variant="outline"
             size="sm"
+            className="hover:bg-green-50 hover:border-green-300"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
             Previous
           </Button>
           
-          <span className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
-          </span>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-600 bg-white px-3 py-1 rounded-full border">
+              Page {currentPage} of {totalPages}
+            </span>
+          </div>
           
           <Button
             onClick={() => setCurrentPage(currentPage + 1)}
             disabled={currentPage === totalPages}
             variant="outline"
             size="sm"
+            className="hover:bg-green-50 hover:border-green-300"
           >
             Next
             <ChevronRight className="w-4 h-4 ml-1" />

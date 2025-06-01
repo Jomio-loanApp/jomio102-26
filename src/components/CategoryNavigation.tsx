@@ -26,7 +26,7 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
       setIsLoading(true)
       console.log('Fetching categories...')
       
-      // Fixed query - removing non-existent columns is_active and sort_order
+      // Fixed query - only select existing columns
       const { data, error } = await supabase
         .from('categories')
         .select('category_id, name, image_url')
@@ -53,8 +53,8 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
       <div className="flex space-x-4 overflow-x-auto pb-2">
         {[...Array(6)].map((_, index) => (
           <div key={index} className="flex flex-col items-center space-y-2 min-w-[80px]">
-            <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse"></div>
-            <div className="w-12 h-3 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-16 h-16 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full animate-pulse shadow-sm"></div>
+            <div className="w-12 h-3 bg-gray-200 rounded-full animate-pulse"></div>
           </div>
         ))}
       </div>
@@ -66,16 +66,16 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
       {/* All Categories */}
       <button
         onClick={() => onCategorySelect(null)}
-        className={`flex flex-col items-center space-y-2 min-w-[80px] transition-colors ${
-          selectedCategory === null ? 'text-green-600' : 'text-gray-600'
+        className={`flex flex-col items-center space-y-2 min-w-[80px] transition-all duration-200 transform hover:scale-105 ${
+          selectedCategory === null ? 'text-green-600' : 'text-gray-600 hover:text-green-500'
         }`}
       >
-        <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center ${
+        <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center shadow-md transition-all duration-200 ${
           selectedCategory === null 
-            ? 'border-green-600 bg-green-50' 
-            : 'border-gray-200 bg-gray-50'
+            ? 'border-green-600 bg-gradient-to-br from-green-50 to-green-100 shadow-green-200' 
+            : 'border-gray-200 bg-gradient-to-br from-gray-50 to-white hover:border-green-300 hover:shadow-lg'
         }`}>
-          <span className="text-lg">🏪</span>
+          <span className="text-xl">🏪</span>
         </div>
         <span className="text-xs text-center font-medium">All</span>
       </button>
@@ -84,14 +84,14 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
         <button
           key={category.category_id}
           onClick={() => onCategorySelect(category.category_id)}
-          className={`flex flex-col items-center space-y-2 min-w-[80px] transition-colors ${
-            selectedCategory === category.category_id ? 'text-green-600' : 'text-gray-600'
+          className={`flex flex-col items-center space-y-2 min-w-[80px] transition-all duration-200 transform hover:scale-105 ${
+            selectedCategory === category.category_id ? 'text-green-600' : 'text-gray-600 hover:text-green-500'
           }`}
         >
-          <div className={`w-16 h-16 rounded-full border-2 overflow-hidden ${
+          <div className={`w-16 h-16 rounded-full border-2 overflow-hidden shadow-md transition-all duration-200 ${
             selectedCategory === category.category_id 
-              ? 'border-green-600' 
-              : 'border-gray-200'
+              ? 'border-green-600 shadow-green-200' 
+              : 'border-gray-200 hover:border-green-300 hover:shadow-lg'
           }`}>
             {category.image_url ? (
               <img
@@ -100,7 +100,7 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
                 <span className="text-2xl">📦</span>
               </div>
             )}

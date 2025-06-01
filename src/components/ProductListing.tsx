@@ -44,24 +44,20 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
       setIsLoading(true)
       console.log('Fetching products with categoryId:', categoryId, 'searchQuery:', searchQuery)
       
-      // Using correct schema - product_id instead of id
       let query = supabase
         .from('products')
         .select('*', { count: 'exact' })
         .eq('is_active', true)
         .neq('availability_status', 'Out of Stock')
 
-      // Apply category filter using correct column name
       if (categoryId) {
         query = query.eq('category_id', categoryId)
       }
 
-      // Apply search filter
       if (searchQuery) {
         query = query.or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
       }
 
-      // Apply pagination
       const from = (page - 1) * PRODUCTS_PER_PAGE
       const to = from + PRODUCTS_PER_PAGE - 1
       query = query.range(from, to)
@@ -124,7 +120,6 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Results Info */}
       <div className="flex justify-between items-center">
         <p className="text-sm text-gray-600">
           Showing {((currentPage - 1) * PRODUCTS_PER_PAGE) + 1} - {Math.min(currentPage * PRODUCTS_PER_PAGE, totalCount)} of {totalCount} products
@@ -132,14 +127,12 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
         </p>
       </div>
 
-      {/* Products Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {products.map((product) => (
           <ProductCard key={product.product_id} product={product} />
         ))}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center space-x-4 pt-6">
           <Button

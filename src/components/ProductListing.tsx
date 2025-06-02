@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ProductCard from './ProductCard'
+import ProductQuickView from './ProductQuickView'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -11,11 +12,17 @@ interface Product {
   name: string
   description: string | null
   price_string: string
+  numeric_price: number
   unit_type: string
   image_url: string | null
   category_id: string | null
   availability_status: string
   is_active: boolean
+}
+
+interface Tag {
+  tag_id: string
+  name: string
 }
 
 interface ProductListingProps {
@@ -31,6 +38,7 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
 
   useEffect(() => {
     setCurrentPage(1)
@@ -84,6 +92,14 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleQuickView = (product: Product) => {
+    setSelectedProduct(product)
+  }
+
+  const handleCloseQuickView = () => {
+    setSelectedProduct(null)
   }
 
   const totalPages = Math.ceil(totalCount / PRODUCTS_PER_PAGE)
@@ -149,62 +165,66 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
-          Showing {((currentPage - 1) * PRODUCTS_PER_PAGE) + 1} - {Math.min(currentPage * PRODUCTS_PER_PAGE, totalCount)} of {totalCount} products
-          {searchQuery && ` for "${searchQuery}"`}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {products.map((product) => (
-          <ProductCard 
-            key={product.product_id} 
-            product={{
-              id: product.product_id,
-              name: product.name,
-              description: product.description,
-              price_string: product.price_string,
-              unit_type: product.unit_type,
-              image_url: product.image_url
-            }} 
-          />
-        ))}
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-4 pt-6">
-          <Button
-            onClick={() => setCurrentPage(currentPage - 1)}
-            disabled={currentPage === 1}
-            variant="outline"
-            size="sm"
-            className="hover:bg-green-50 hover:border-green-300"
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            Previous
-          </Button>
-          
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600 bg-white px-3 py-1 rounded-full border">
-              Page {currentPage} of {totalPages}
-            </span>
-          </div>
-          
-          <Button
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            variant="outline"
-            size="sm"
-            className="hover:bg-green-50 hover:border-green-300"
-          >
-            Next
-            <ChevronRight className="w-4 h-4 ml-1" />
-          </Button>
+    <>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <p className="text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
+            Showing {((currentPage - 1) * PRODUCTS_PER_PAGE) + 1} - {Math.min(currentPage * PRODUCTS_PER_PAGE, totalCount)} of {totalCount} products
+            {searchQuery && ` for "${searchQuery}"`}
+          </p>
         </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {products.map((product) => (
+            <ProductCard 
+              key={product.product_id} 
+              product={product}
+              onQuickView={handleQuickView}
+            />
+          ))}
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center space-x-4 pt-6">
+            <Button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              variant="outline"
+              size="sm"
+              className="hover:bg-green-50 hover:border-green-300"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Previous
+            </Button>
+            
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600 bg-white px-3 py-1 rounded-full border">
+                Page {currentPage} of {totalPages}
+              </span>
+            </div>
+            
+            <Button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              variant="outline"
+              size="sm"
+              className="hover:bg-green-50 hover:border-green-300"
+            >
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {selectedProduct && (
+        <ProductQuickView
+          product={selectedProduct}
+          isOpen={!!selectedProduct}
+          onClose={handleCloseQuickView}
+        />
       )}
-    </div>
+    </>
   )
 }
 

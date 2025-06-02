@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ProductCard from './ProductCard'
@@ -8,6 +7,7 @@ import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface Product {
+  id?: string
   product_id: string
   name: string
   description: string | null
@@ -82,7 +82,13 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
         throw error
       }
 
-      setProducts(data || [])
+      // Map the data to include id property for compatibility
+      const productsWithId = (data || []).map(product => ({
+        ...product,
+        id: product.product_id
+      }))
+
+      setProducts(productsWithId)
       setTotalCount(count || 0)
     } catch (error: any) {
       console.error('Error fetching products:', error)

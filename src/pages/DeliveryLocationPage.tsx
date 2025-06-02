@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLocationStore } from '@/stores/locationStore'
 import { useCartStore } from '@/stores/cartStore'
+import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,13 +37,10 @@ const DeliveryLocationPage = () => {
 
   const initializeMap = async () => {
     try {
-      // Dynamically import Google Maps API
-      const { GoogleMap, Marker, LoadScript } = await import('@react-google-maps/api')
-      setIsLoadingMap(false)
-      
-      // For now, we'll use a simple implementation
-      // The actual Google Maps integration would require the LoadScript wrapper
+      // For now, we'll use a simple implementation without Google Maps
+      // The actual Google Maps integration can be added later when properly configured
       console.log('Map initialized with position:', position)
+      setIsLoadingMap(false)
       updateLocationName(position[0], position[1])
     } catch (error) {
       console.error('Error loading map:', error)

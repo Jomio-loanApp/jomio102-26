@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface Product {
-  id?: string
+  id: string
   product_id: string
   name: string
   description: string | null

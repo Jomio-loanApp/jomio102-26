@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCartStore } from '@/stores/cartStore'
@@ -53,7 +54,7 @@ const CartPage = () => {
       })
       return
     }
-    // Navigate to delivery location selection first
+    // Navigate to delivery location selection
     navigate('/select-delivery-location')
   }
 

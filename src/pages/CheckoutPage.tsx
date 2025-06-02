@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
+import { useLocationStore } from '@/stores/locationStore'
 import { supabase } from '@/lib/supabase'
 import Header from '@/components/Header'
-import LocationSelector from '@/components/LocationSelector'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,37 +24,25 @@ interface DeliveryOption {
   estimated_time?: string
 }
 
-interface Address {
-  id: string
-  address_nickname: string
-  latitude: number
-  longitude: number
-  location_name: string
-  is_default: boolean
-}
-
 const CheckoutPage = () => {
   const { user, profile } = useAuthStore()
   const { items, getSubtotal, clearCart } = useCartStore()
+  const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
   const navigate = useNavigate()
 
   // Form states
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [deliveryLat, setDeliveryLat] = useState<number | null>(null)
-  const [deliveryLng, setDeliveryLng] = useState<number | null>(null)
-  const [deliveryLocationName, setDeliveryLocationName] = useState('')
   const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('')
   const [customerNotes, setCustomerNotes] = useState('')
   
   // Data states
   const [deliveryOptions, setDeliveryOptions] = useState<DeliveryOption[]>([])
-  const [savedAddresses, setSavedAddresses] = useState<Address[]>([])
   const [deliveryCharge, setDeliveryCharge] = useState(0)
   const [minimumOrderValue, setMinimumOrderValue] = useState(0)
   
   // UI states
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [deliveryOptionsError, setDeliveryOptionsError] = useState<string | null>(null)
 
@@ -66,29 +54,44 @@ const CheckoutPage = () => {
       navigate('/cart')
       return
     }
-    
-    fetchShopSettings()
-    if (user) {
-      setCustomerName(profile?.full_name || '')
-      setCustomerPhone(profile?.phone_number || '')
-      fetchSavedAddresses()
+
+    if (!deliveryLat || !deliveryLng) {
+      console.log('CheckoutPage: No delivery location set, redirecting to location selection')
+      navigate('/select-delivery-location')
+      return
     }
-  }, [user, profile, items.length, navigate])
+    
+    initializeCheckout()
+  }, [user, profile, items.length, deliveryLat, deliveryLng, navigate])
 
   useEffect(() => {
-    console.log('CheckoutPage: Location or delivery option changed', {
-      deliveryLat,
-      deliveryLng,
-      selectedDeliveryOption
-    })
-    
-    if (deliveryLat && deliveryLng) {
-      fetchDeliveryOptions()
-      if (selectedDeliveryOption === 'instant') {
-        calculateDeliveryCharge()
-      }
+    if (selectedDeliveryOption === 'instant' && deliveryLat && deliveryLng) {
+      calculateDeliveryCharge()
+    } else {
+      setDeliveryCharge(0)
     }
-  }, [deliveryLat, deliveryLng, selectedDeliveryOption])
+  }, [selectedDeliveryOption, deliveryLat, deliveryLng])
+
+  const initializeCheckout = async () => {
+    setIsLoading(true)
+    
+    try {
+      await Promise.all([
+        fetchShopSettings(),
+        fetchDeliveryOptions()
+      ])
+
+      // Pre-fill customer info if logged in
+      if (user) {
+        setCustomerName(profile?.full_name || '')
+        setCustomerPhone(profile?.phone_number || '')
+      }
+    } catch (error) {
+      console.error('Error initializing checkout:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const fetchShopSettings = async () => {
     try {
@@ -111,30 +114,6 @@ const CheckoutPage = () => {
     }
   }
 
-  const fetchSavedAddresses = async () => {
-    if (!user) return
-
-    try {
-      console.log('CheckoutPage: Fetching saved addresses for user:', user.id)
-      const { data, error } = await supabase
-        .from('addresses')
-        .select('*')
-        .eq('profile_id', user.id)
-        .order('is_default', { ascending: false })
-
-      if (error) {
-        console.error('CheckoutPage: Error fetching addresses:', error)
-        throw error
-      }
-      
-      console.log('CheckoutPage: Saved addresses fetched:', data)
-      setSavedAddresses(data || [])
-    } catch (error) {
-      console.error('Error fetching addresses:', error)
-      setSavedAddresses([])
-    }
-  }
-
   const fetchDeliveryOptions = async () => {
     try {
       console.log('CheckoutPage: Fetching delivery options...')
@@ -149,6 +128,11 @@ const CheckoutPage = () => {
       
       console.log('CheckoutPage: Delivery options fetched:', data)
       setDeliveryOptions(data || [])
+      
+      // Auto-select first option if available
+      if (data && data.length > 0) {
+        setSelectedDeliveryOption(data[0].type)
+      }
     } catch (error) {
       console.error('Error fetching delivery options:', error)
       setDeliveryOptionsError('Failed to load delivery options. Using default options.')
@@ -161,6 +145,7 @@ const CheckoutPage = () => {
       ]
       console.log('CheckoutPage: Using fallback delivery options:', fallbackOptions)
       setDeliveryOptions(fallbackOptions)
+      setSelectedDeliveryOption('instant')
     }
   }
 
@@ -188,25 +173,13 @@ const CheckoutPage = () => {
     }
   }
 
-  const handleLocationSelect = (lat: number, lng: number, locationName: string) => {
-    console.log('CheckoutPage: Location selected:', { lat, lng, locationName })
-    setDeliveryLat(lat)
-    setDeliveryLng(lng)
-    setDeliveryLocationName(locationName)
-  }
-
-  const selectSavedAddress = (address: Address) => {
-    console.log('CheckoutPage: Saved address selected:', address)
-    setDeliveryLat(address.latitude)
-    setDeliveryLng(address.longitude)
-    setDeliveryLocationName(address.location_name)
-  }
-
   const handlePlaceOrder = async () => {
     console.log('CheckoutPage: Placing order...')
     setIsPlacingOrder(true)
 
     try {
+      const finalDeliveryCharge = selectedDeliveryOption === 'instant' ? deliveryCharge : 0
+      
       const orderData = {
         customer_name: customerName,
         customer_phone: customerPhone,
@@ -224,8 +197,8 @@ const CheckoutPage = () => {
           product_image_at_purchase: item.image_url,
         })),
         items_subtotal: getSubtotal(),
-        delivery_charge: selectedDeliveryOption === 'instant' ? deliveryCharge : 0,
-        total_amount: getSubtotal() + (selectedDeliveryOption === 'instant' ? deliveryCharge : 0),
+        delivery_charge: finalDeliveryCharge,
+        total_amount: getSubtotal() + finalDeliveryCharge,
       }
 
       console.log('CheckoutPage: Order data prepared:', orderData)
@@ -233,8 +206,17 @@ const CheckoutPage = () => {
       let result
       if (user) {
         console.log('CheckoutPage: User is authenticated, creating authenticated order')
-        // TODO: Call create-authenticated-order function when available
-        result = { data: { order_id: 'temp_auth_' + Date.now() } }
+        // Try to call create-authenticated-order, fallback to guest order
+        try {
+          result = await supabase.functions.invoke('create-authenticated-order', {
+            body: orderData
+          })
+        } catch (authOrderError) {
+          console.log('Authenticated order failed, falling back to guest order:', authOrderError)
+          result = await supabase.functions.invoke('create-guest-order', {
+            body: orderData
+          })
+        }
       } else {
         console.log('CheckoutPage: User is guest, creating guest order')
         result = await supabase.functions.invoke('create-guest-order', {
@@ -270,20 +252,33 @@ const CheckoutPage = () => {
   const subtotal = getSubtotal()
   const finalDeliveryCharge = selectedDeliveryOption === 'instant' ? deliveryCharge : 0
   const totalAmount = subtotal + finalDeliveryCharge
-  const canProceed = subtotal >= minimumOrderValue
+  const canProceed = subtotal >= minimumOrderValue && customerName && customerPhone && selectedDeliveryOption
 
-  console.log('CheckoutPage: Render state:', {
-    itemsCount: items.length,
-    subtotal,
-    minimumOrderValue,
-    canProceed,
-    deliveryLat,
-    deliveryLng,
-    selectedDeliveryOption,
-    deliveryOptionsCount: deliveryOptions.length
-  })
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header showSearch={false} />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            {[...Array(3)].map((_, index) => (
+              <div key={index} className="bg-white p-6 rounded-lg border">
+                <div className="flex space-x-4">
+                  <div className="w-20 h-20 bg-gray-200 rounded"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  if (!canProceed && subtotal > 0) {
+  if (!canProceed && subtotal < minimumOrderValue) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <Header showSearch={false} />
@@ -325,7 +320,7 @@ const CheckoutPage = () => {
               <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
             </div>
 
-            {/* Step 1: Customer Information */}
+            {/* Customer Information */}
             <Card className="border-gray-200 shadow-sm">
               <CardHeader className="bg-gray-50 border-b border-gray-200">
                 <CardTitle className="flex items-center space-x-3">
@@ -359,85 +354,69 @@ const CheckoutPage = () => {
               </CardContent>
             </Card>
 
-            {/* Step 2: Delivery Location */}
+            {/* Delivery Address Confirmation */}
             <Card className="border-gray-200 shadow-sm">
               <CardHeader className="bg-gray-50 border-b border-gray-200">
                 <CardTitle className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">2</div>
-                  <span>Delivery Location</span>
+                  <span>Delivery Address</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 p-6">
-                {/* Saved Addresses */}
-                {user && savedAddresses.length > 0 && (
-                  <div>
-                    <Label className="text-base font-medium">Saved Addresses</Label>
-                    <div className="grid gap-3 mt-3">
-                      {savedAddresses.map((address) => (
-                        <button
-                          key={address.id}
-                          onClick={() => selectSavedAddress(address)}
-                          className="text-left p-4 border rounded-lg hover:bg-green-50 hover:border-green-300 transition-all duration-200"
-                        >
-                          <div className="flex items-start space-x-3">
-                            <MapPin className="w-5 h-5 text-green-600 mt-0.5" />
-                            <div>
-                              <div className="font-medium text-gray-900">{address.address_nickname}</div>
-                              <div className="text-sm text-gray-600">{address.location_name}</div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
+              <CardContent className="p-6">
+                <div className="flex items-start space-x-3">
+                  <MapPin className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">{deliveryLocationName}</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Coordinates: {deliveryLat?.toFixed(6)}, {deliveryLng?.toFixed(6)}
                     </div>
-                    <Separator className="my-6" />
-                    <Label className="text-base font-medium">Or Select New Location</Label>
                   </div>
-                )}
-
-                <LocationSelector
-                  onLocationSelect={handleLocationSelect}
-                  selectedPosition={deliveryLat && deliveryLng ? [deliveryLat, deliveryLng] : undefined}
-                />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigate('/select-delivery-location')}
+                  >
+                    Change
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Step 3: Delivery Options */}
-            {deliveryLat && deliveryLng && deliveryOptions.length > 0 && (
-              <Card className="border-gray-200 shadow-sm">
-                <CardHeader className="bg-gray-50 border-b border-gray-200">
-                  <CardTitle className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">3</div>
-                    <span>Delivery Options</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {deliveryOptionsError && (
-                    <Alert className="mb-4 border-yellow-200 bg-yellow-50">
-                      <AlertCircle className="h-4 w-4 text-yellow-600" />
-                      <AlertDescription className="text-yellow-700">{deliveryOptionsError}</AlertDescription>
-                    </Alert>
-                  )}
-                  <RadioGroup value={selectedDeliveryOption} onValueChange={setSelectedDeliveryOption}>
-                    {deliveryOptions.map((option) => (
-                      <div key={option.type} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                        <RadioGroupItem value={option.type} id={option.type} className="text-green-600" />
-                        <div className="flex-1">
-                          <label htmlFor={option.type} className="font-medium cursor-pointer text-gray-900">
-                            {option.label}
-                          </label>
-                          {option.charge > 0 && (
-                            <p className="text-sm text-gray-600">₹{option.charge} delivery charge</p>
-                          )}
-                        </div>
-                        <Clock className="w-5 h-5 text-gray-400" />
+            {/* Delivery Options */}
+            <Card className="border-gray-200 shadow-sm">
+              <CardHeader className="bg-gray-50 border-b border-gray-200">
+                <CardTitle className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">3</div>
+                  <span>Delivery Options</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {deliveryOptionsError && (
+                  <Alert className="mb-4 border-yellow-200 bg-yellow-50">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <AlertDescription className="text-yellow-700">{deliveryOptionsError}</AlertDescription>
+                  </Alert>
+                )}
+                <RadioGroup value={selectedDeliveryOption} onValueChange={setSelectedDeliveryOption}>
+                  {deliveryOptions.map((option) => (
+                    <div key={option.type} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <RadioGroupItem value={option.type} id={option.type} className="text-green-600" />
+                      <div className="flex-1">
+                        <label htmlFor={option.type} className="font-medium cursor-pointer text-gray-900">
+                          {option.label}
+                        </label>
+                        {option.type === 'instant' && selectedDeliveryOption === 'instant' && deliveryCharge > 0 && (
+                          <p className="text-sm text-gray-600">₹{deliveryCharge} delivery charge</p>
+                        )}
                       </div>
-                    ))}
-                  </RadioGroup>
-                </CardContent>
-              </Card>
-            )}
+                      <Clock className="w-5 h-5 text-gray-400" />
+                    </div>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+            </Card>
 
-            {/* Step 4: Order Notes */}
+            {/* Order Notes */}
             <Card className="border-gray-200 shadow-sm">
               <CardHeader className="bg-gray-50 border-b border-gray-200">
                 <CardTitle className="flex items-center space-x-3">
@@ -508,10 +487,21 @@ const CheckoutPage = () => {
                   </div>
                 </div>
 
+                {/* Minimum Order Warning */}
+                {subtotal < minimumOrderValue && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Minimum order value is ₹{minimumOrderValue.toFixed(2)}.</strong>
+                      <br />
+                      Please add items worth ₹{(minimumOrderValue - subtotal).toFixed(2)} more.
+                    </p>
+                  </div>
+                )}
+
                 {/* Place Order Button */}
                 <Button
                   onClick={handlePlaceOrder}
-                  disabled={!customerName || !customerPhone || !deliveryLat || !selectedDeliveryOption || isPlacingOrder}
+                  disabled={!canProceed || isPlacingOrder}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
                   size="lg"
                 >

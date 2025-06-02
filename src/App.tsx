@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react'
 import { Toaster } from "@/components/ui/toaster"
 import { Toaster as Sonner } from "@/components/ui/sonner"
@@ -48,7 +47,6 @@ const App = () => {
               <Route path="/cart" element={<CartPage />} />
               <Route path="/wishlist" element={<WishlistPage />} />
               <Route path="/select-delivery-location" element={<DeliveryLocationPage />} />
-              <Route path="/checkout-details" element={<CheckoutDetailsPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
               <Route path="/profile" element={<ProfilePage />} />

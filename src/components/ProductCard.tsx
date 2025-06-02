@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useWishlistStore } from '@/stores/wishlistStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useCartStore } from '@/stores/cartStore'
 import { toast } from '@/hooks/use-toast'
 
 interface Product {
@@ -36,6 +37,7 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickView }) => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const { addItem: addToCart } = useCartStore()
   const { isInWishlist, addItem: addToWishlist, removeItem: removeFromWishlist } = useWishlistStore()
   
   const isWishlisted = isInWishlist(product.product_id)
@@ -49,7 +51,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
           description: `${product.name} has been removed from your wishlist.`,
         })
       } else {
-        await addToWishlist(product.product_id)
+        const wishlistItem = {
+          product_id: product.product_id,
+          name: product.name,
+          price_string: product.price_string,
+          image_url: product.image_url
+        }
+        await addToWishlist(wishlistItem)
         toast({
           title: "Added to wishlist",
           description: `${product.name} has been added to your wishlist.`,
@@ -65,18 +73,19 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
   }
 
   const handleAddToCart = () => {
-    // Navigate to delivery location page with product data
-    navigate('/select-delivery-location', { 
-      state: { 
-        product: {
-          product_id: product.product_id,
-          name: product.name,
-          price_string: product.price_string,
-          numeric_price: product.numeric_price,
-          unit_type: product.unit_type,
-          image_url: product.image_url
-        }
-      }
+    // Add item directly to cart
+    const cartItem = {
+      product_id: product.product_id,
+      name: product.name,
+      price_string: product.price_string,
+      image_url: product.image_url
+    }
+    
+    addToCart(cartItem, 1)
+    
+    toast({
+      title: "Added to cart",
+      description: `${product.name} has been added to your cart.`,
     })
   }
 

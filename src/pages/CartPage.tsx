@@ -54,7 +54,7 @@ const CartPage = () => {
       })
       return
     }
-    // Navigate to delivery location selection
+    // Navigate to delivery location selection page
     navigate('/select-delivery-location')
   }
 

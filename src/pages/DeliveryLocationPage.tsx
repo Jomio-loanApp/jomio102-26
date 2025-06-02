@@ -1,22 +1,20 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useLocationStore } from '@/stores/locationStore'
-import { useCartStore } from '@/stores/cartStore'
 import { supabase } from '@/lib/supabase'
-import { GoogleMap, Marker, LoadScript, Autocomplete } from '@react-google-maps/api'
+import { GoogleMap, LoadScript } from '@react-google-maps/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import { MapPin, Navigation, Loader2, ArrowLeft, Search } from 'lucide-react'
-import CrosshairIcon from '@/components/CrosshairIcon'
+import { ArrowLeft, Search, Navigation, Loader2, MapPin, AlertCircle } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 const libraries: ("places")[] = ["places"]
 
 const mapContainerStyle = {
   width: '100%',
-  height: '70vh'
+  height: '100%'
 }
 
 const defaultCenter = {
@@ -26,33 +24,30 @@ const defaultCenter = {
 
 const DeliveryLocationPage = () => {
   const navigate = useNavigate()
-  const location = useLocation()
-  const { addItem } = useCartStore()
   const { setDeliveryLocation } = useLocationStore()
-  
-  // Get product data from navigation state
-  const productToAdd = location.state?.product
   
   const [position, setPosition] = useState(defaultCenter)
   const [isLocating, setIsLocating] = useState(false)
   const [isLoadingMap, setIsLoadingMap] = useState(true)
   const [locationName, setLocationName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [useReticle, setUseReticle] = useState(true) // Mobile-first approach
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false)
   
   const mapRef = useRef<google.maps.Map | null>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const centerChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    getCurrentLocation()
+    // Don't automatically get location on page load, let user choose
+    setIsLoadingMap(false)
   }, [])
 
   const handleMapLoad = (map: google.maps.Map) => {
     mapRef.current = map
     setIsLoadingMap(false)
-    updateLocationName(position.lat, position.lng)
+    // Set initial position without getting location name immediately
+    setPosition(defaultCenter)
   }
 
   const updateLocationName = async (lat: number, lng: number) => {
@@ -73,23 +68,21 @@ const DeliveryLocationPage = () => {
           return
         }
       } catch (edgeFunctionError) {
-        console.log('Edge function call failed (expected if not deployed):', edgeFunctionError)
+        console.log('Edge function call failed, trying Google Geocoding:', edgeFunctionError)
       }
       
       // Fallback to Google Geocoding API
-      if (window.google && window.google.maps) {
+      if (window.google && window.google.maps && window.google.maps.Geocoder) {
         const geocoder = new google.maps.Geocoder()
         geocoder.geocode({ location: { lat, lng } }, (results, status) => {
           if (status === 'OK' && results && results[0]) {
             setLocationName(results[0].formatted_address)
           } else {
-            // Final fallback
             const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
             setLocationName(fallbackName)
           }
         })
       } else {
-        // Final fallback when Google is not available
         const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
         setLocationName(fallbackName)
       }
@@ -105,6 +98,7 @@ const DeliveryLocationPage = () => {
 
   const getCurrentLocation = () => {
     setIsLocating(true)
+    setLocationPermissionDenied(false)
     
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -120,13 +114,19 @@ const DeliveryLocationPage = () => {
           if (mapRef.current) {
             mapRef.current.panTo(newPosition)
           }
+          
+          toast({
+            title: "Location found",
+            description: "Map centered on your current location",
+          })
         },
         (error) => {
           console.error('Geolocation error:', error)
           setIsLocating(false)
+          setLocationPermissionDenied(true)
           toast({
             title: "Location access denied",
-            description: "Please select your location manually on the map",
+            description: "Please select your location manually on the map or enable location access",
             variant: "destructive"
           })
         },
@@ -138,6 +138,7 @@ const DeliveryLocationPage = () => {
       )
     } else {
       setIsLocating(false)
+      setLocationPermissionDenied(true)
       toast({
         title: "Geolocation not supported",
         description: "Please enter your address manually",
@@ -146,19 +147,8 @@ const DeliveryLocationPage = () => {
     }
   }
 
-  const handleMapClick = (event: google.maps.MapMouseEvent) => {
-    if (event.latLng && !useReticle) {
-      const lat = event.latLng.lat()
-      const lng = event.latLng.lng()
-      console.log('Map clicked at:', lat, lng)
-      const newPosition = { lat, lng }
-      setPosition(newPosition)
-      updateLocationName(lat, lng)
-    }
-  }
-
   const handleMapCenterChanged = useCallback(() => {
-    if (!useReticle || !mapRef.current || isUpdatingLocation) return
+    if (!mapRef.current || isUpdatingLocation) return
     
     // Clear any existing timeout
     if (centerChangeTimeoutRef.current) {
@@ -182,19 +172,8 @@ const DeliveryLocationPage = () => {
           updateLocationName(lat, lng)
         }
       }
-    }, 500)
-  }, [useReticle, position.lat, position.lng, isUpdatingLocation])
-
-  const handleMarkerDragEnd = (event: google.maps.MapMouseEvent) => {
-    if (event.latLng && !useReticle) {
-      const lat = event.latLng.lat()
-      const lng = event.latLng.lng()
-      console.log('Marker dragged to:', lat, lng)
-      const newPosition = { lat, lng }
-      setPosition(newPosition)
-      updateLocationName(lat, lng)
-    }
-  }
+    }, 1000)
+  }, [position.lat, position.lng, isUpdatingLocation])
 
   const onPlaceChanged = () => {
     if (autocompleteRef.current) {
@@ -224,87 +203,84 @@ const DeliveryLocationPage = () => {
     if (position && locationName) {
       setDeliveryLocation(position.lat, position.lng, locationName)
       
-      // Add product to cart if coming from product selection
-      if (productToAdd) {
-        addItem(productToAdd, 1)
-        toast({
-          title: "Product added to cart",
-          description: `${productToAdd.name} has been added to your cart`,
-        })
-      }
-      
       toast({
         title: "Location confirmed",
         description: "Proceeding to checkout",
       })
       
       navigate('/checkout')
+    } else {
+      toast({
+        title: "Please select a location",
+        description: "Move the map to select your delivery location",
+        variant: "destructive"
+      })
     }
   }
 
   const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q'
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Compact Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(-1)}
-              className="p-2"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg font-bold text-gray-900">Set Delivery Location</h1>
-            </div>
-          </div>
+    <div className="min-h-screen bg-white relative">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 relative z-50">
+        <div className="flex items-center space-x-3">
           <Button
-            onClick={getCurrentLocation}
-            disabled={isLocating}
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="text-green-600 border-green-600 hover:bg-green-50"
+            onClick={() => navigate(-1)}
+            className="p-2"
           >
-            {isLocating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Navigation className="w-4 h-4" />
-            )}
+            <ArrowLeft className="w-5 h-5" />
           </Button>
+          <h1 className="text-lg font-semibold text-gray-900">Add address</h1>
         </div>
       </div>
 
-      {/* Search Bar - Overlay */}
-      <div className="absolute top-20 left-4 right-4 z-40">
+      {/* Search Bar */}
+      <div className="px-4 py-3 bg-white border-b border-gray-100 relative z-40">
         <LoadScript 
           googleMapsApiKey={GOOGLE_MAPS_API_KEY}
           libraries={libraries}
         >
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
-            <Autocomplete
-              onLoad={(autocomplete) => {
-                autocompleteRef.current = autocomplete
-              }}
-              onPlaceChanged={onPlaceChanged}
-            >
-              <Input
-                placeholder="Search for your location..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white shadow-lg border-gray-300 focus:border-green-500 focus:ring-green-500"
-              />
-            </Autocomplete>
+            <Input
+              placeholder="Search for a new area, locality..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
+            />
           </div>
         </LoadScript>
       </div>
 
-      {/* Full Screen Map */}
-      <div className="relative" style={{ height: 'calc(100vh - 80px)' }}>
+      {/* Device location not enabled banner */}
+      {locationPermissionDenied && (
+        <div className="px-4 py-2 bg-red-50 border-b border-red-100 relative z-40">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-4 h-4 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-red-800">Device location not enabled</p>
+                <p className="text-xs text-red-600">Enable for a better delivery experience</p>
+              </div>
+            </div>
+            <Button
+              onClick={getCurrentLocation}
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              Enable
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Map Container */}
+      <div className="relative" style={{ height: locationPermissionDenied ? 'calc(100vh - 180px)' : 'calc(100vh - 140px)' }}>
         <LoadScript 
           googleMapsApiKey={GOOGLE_MAPS_API_KEY}
           libraries={libraries}
@@ -318,11 +294,10 @@ const DeliveryLocationPage = () => {
           }
         >
           <GoogleMap
-            mapContainerStyle={{ width: '100%', height: '100%' }}
+            mapContainerStyle={mapContainerStyle}
             center={position}
             zoom={15}
             onLoad={handleMapLoad}
-            onClick={handleMapClick}
             onCenterChanged={handleMapCenterChanged}
             options={{
               zoomControl: false,
@@ -333,71 +308,97 @@ const DeliveryLocationPage = () => {
               gestureHandling: 'greedy',
             }}
           >
-            {useReticle ? (
-              // Centered crosshair/reticle for mobile UX
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-                <div className="relative">
-                  <CrosshairIcon className="w-8 h-8 text-red-500" />
-                  <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-xs">
-                    Tap location
-                  </div>
+            {/* Fixed center pin overlay */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+              <div className="relative">
+                {/* Pin icon */}
+                <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+                  <div className="w-4 h-4 bg-white rounded-full"></div>
+                </div>
+                <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black"></div>
+                
+                {/* Tooltip */}
+                <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-3 py-2 rounded text-sm whitespace-nowrap">
+                  Your order will be delivered here
+                  <br />
+                  Move pin to your exact location
                 </div>
               </div>
-            ) : (
-              // Traditional draggable marker
-              <Marker
-                position={position}
-                draggable={true}
-                onDragEnd={handleMarkerDragEnd}
-              />
-            )}
+            </div>
           </GoogleMap>
         </LoadScript>
 
-        {/* Map Mode Toggle */}
-        <div className="absolute top-4 right-4 z-30">
+        {/* Use current location button - floating */}
+        <div className="absolute bottom-24 left-4 right-4 z-30">
           <Button
-            onClick={() => setUseReticle(!useReticle)}
+            onClick={getCurrentLocation}
+            disabled={isLocating}
             variant="outline"
-            size="sm"
-            className="bg-white"
+            className="w-full bg-white border-gray-300 text-gray-700 shadow-lg"
           >
-            {useReticle ? 'Drag Mode' : 'Tap Mode'}
+            {isLocating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Getting location...
+              </>
+            ) : (
+              <>
+                <Navigation className="w-4 h-4 mr-2 text-green-600" />
+                Use current location
+              </>
+            )}
           </Button>
         </div>
       </div>
 
-      {/* Bottom Panel with Location Info and Confirm Button */}
+      {/* Bottom confirmation card */}
       <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-40">
-        {locationName && (
-          <Card className="mb-4 border-blue-200 bg-blue-50">
-            <CardContent className="p-3">
-              <div className="flex items-start space-x-3">
-                <MapPin className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-blue-900 text-sm">Selected Location</h3>
-                  <p className="text-sm text-blue-700">{locationName}</p>
+        <div className="space-y-3">
+          <div className="text-sm text-gray-600">Delivering your order to</div>
+          
+          {locationName ? (
+            <div className="flex items-start space-x-3">
+              <MapPin className="w-5 h-5 text-gray-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-medium text-gray-900">{locationName}</p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setLocationName('')
+                      setSearchQuery('')
+                    }}
+                    className="text-xs"
+                  >
+                    Change
+                  </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Button
-          onClick={handleConfirmLocation}
-          disabled={!locationName || isUpdatingLocation}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
-          size="lg"
-        >
-          {isUpdatingLocation ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Getting location...
-            </>
+            </div>
           ) : (
-            productToAdd ? 'Confirm Location & Add to Cart' : 'Confirm Location & Proceed'
+            <div className="flex items-center space-x-3 text-gray-500">
+              <MapPin className="w-5 h-5" />
+              <span>Move the map to select your location</span>
+            </div>
           )}
-        </Button>
+
+          <Button
+            onClick={handleConfirmLocation}
+            disabled={!locationName || isUpdatingLocation}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
+            size="lg"
+          >
+            {isUpdatingLocation ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Getting location...
+              </>
+            ) : (
+              'Confirm Location & Proceed'
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )

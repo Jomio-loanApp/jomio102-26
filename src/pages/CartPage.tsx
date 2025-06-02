@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCartStore } from '@/stores/cartStore'
@@ -54,7 +53,8 @@ const CartPage = () => {
       })
       return
     }
-    navigate('/checkout')
+    // Navigate to delivery location selection first
+    navigate('/select-delivery-location')
   }
 
   if (isLoading) {

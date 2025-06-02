@@ -4,60 +4,57 @@ import { useNavigate } from 'react-router-dom'
 import { useLocationStore } from '@/stores/locationStore'
 import { useCartStore } from '@/stores/cartStore'
 import { supabase } from '@/lib/supabase'
+import { GoogleMap, Marker, LoadScript, Autocomplete } from '@react-google-maps/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MapPin, Navigation, Loader2, ArrowLeft, Search } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
+const libraries: ("places")[] = ["places"]
+
+const mapContainerStyle = {
+  width: '100%',
+  height: '400px'
+}
+
+const defaultCenter = {
+  lat: 12.9716, // Bangalore default
+  lng: 77.5946
+}
+
 const DeliveryLocationPage = () => {
   const navigate = useNavigate()
   const { items } = useCartStore()
   const { setDeliveryLocation } = useLocationStore()
   
-  const [position, setPosition] = useState<[number, number]>([12.9716, 77.5946]) // Bangalore default
+  const [position, setPosition] = useState(defaultCenter)
   const [isLocating, setIsLocating] = useState(false)
   const [isLoadingMap, setIsLoadingMap] = useState(true)
   const [locationName, setLocationName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number, name: string} | null>(null)
   
-  const mapRef = useRef<any>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markerRef = useRef<any>(null)
+  const mapRef = useRef<google.maps.Map | null>(null)
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
   useEffect(() => {
     if (items.length === 0) {
       navigate('/cart')
       return
     }
-    
-    initializeMap()
   }, [items.length, navigate])
 
-  const initializeMap = async () => {
-    try {
-      // For now, we'll use a simple implementation without Google Maps
-      // The actual Google Maps integration can be added later when properly configured
-      console.log('Map initialized with position:', position)
-      setIsLoadingMap(false)
-      updateLocationName(position[0], position[1])
-    } catch (error) {
-      console.error('Error loading map:', error)
-      setIsLoadingMap(false)
-      toast({
-        title: "Map loading failed",
-        description: "Please use manual location selection",
-        variant: "destructive"
-      })
-    }
+  const handleMapLoad = (map: google.maps.Map) => {
+    mapRef.current = map
+    setIsLoadingMap(false)
+    updateLocationName(position.lat, position.lng)
   }
 
   const updateLocationName = async (lat: number, lng: number) => {
     try {
       console.log('Getting location name for:', lat, lng)
       
-      // Try to call the edge function first (will fail due to CORS until user fixes it)
+      // Try to call the edge function first
       try {
         const { data, error } = await supabase.functions.invoke('get-location-name', {
           body: { latitude: lat, longitude: lng }
@@ -68,12 +65,20 @@ const DeliveryLocationPage = () => {
           return
         }
       } catch (edgeFunctionError) {
-        console.log('Edge function call failed (expected due to CORS):', edgeFunctionError)
+        console.log('Edge function call failed (expected if not deployed):', edgeFunctionError)
       }
       
-      // Fallback to a formatted location string
-      const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
-      setLocationName(fallbackName)
+      // Fallback to Google Geocoding API
+      const geocoder = new google.maps.Geocoder()
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+          setLocationName(results[0].formatted_address)
+        } else {
+          // Final fallback
+          const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+          setLocationName(fallbackName)
+        }
+      })
       
     } catch (error) {
       console.error('Error getting location name:', error)
@@ -90,9 +95,15 @@ const DeliveryLocationPage = () => {
         (position) => {
           const { latitude, longitude } = position.coords
           console.log('Got current location:', latitude, longitude)
-          setPosition([latitude, longitude])
+          const newPosition = { lat: latitude, lng: longitude }
+          setPosition(newPosition)
           updateLocationName(latitude, longitude)
           setIsLocating(false)
+          
+          // Center map if loaded
+          if (mapRef.current) {
+            mapRef.current.panTo(newPosition)
+          }
         },
         (error) => {
           console.error('Geolocation error:', error)
@@ -119,32 +130,55 @@ const DeliveryLocationPage = () => {
     }
   }
 
-  const handleMapClick = (lat: number, lng: number) => {
-    console.log('Map clicked at:', lat, lng)
-    setPosition([lat, lng])
-    updateLocationName(lat, lng)
+  const handleMapClick = (event: google.maps.MapMouseEvent) => {
+    if (event.latLng) {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
+      console.log('Map clicked at:', lat, lng)
+      const newPosition = { lat, lng }
+      setPosition(newPosition)
+      updateLocationName(lat, lng)
+    }
   }
 
-  const handleSearchSubmit = () => {
-    if (searchQuery.trim()) {
-      // In a real implementation, this would use Google Places API
-      // For now, we'll create a mock location
-      const mockLat = position[0] + (Math.random() - 0.5) * 0.01
-      const mockLng = position[1] + (Math.random() - 0.5) * 0.01
-      
-      setPosition([mockLat, mockLng])
-      setLocationName(searchQuery.trim())
-      
-      toast({
-        title: "Location found",
-        description: `Using: ${searchQuery.trim()}`,
-      })
+  const handleMarkerDragEnd = (event: google.maps.MapMouseEvent) => {
+    if (event.latLng) {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
+      console.log('Marker dragged to:', lat, lng)
+      const newPosition = { lat, lng }
+      setPosition(newPosition)
+      updateLocationName(lat, lng)
+    }
+  }
+
+  const onPlaceChanged = () => {
+    if (autocompleteRef.current) {
+      const place = autocompleteRef.current.getPlace()
+      if (place.geometry && place.geometry.location) {
+        const lat = place.geometry.location.lat()
+        const lng = place.geometry.location.lng()
+        const newPosition = { lat, lng }
+        setPosition(newPosition)
+        setLocationName(place.formatted_address || place.name || '')
+        setSearchQuery(place.formatted_address || place.name || '')
+        
+        // Center map
+        if (mapRef.current) {
+          mapRef.current.panTo(newPosition)
+        }
+        
+        toast({
+          title: "Location found",
+          description: `Using: ${place.formatted_address || place.name}`,
+        })
+      }
     }
   }
 
   const handleConfirmLocation = () => {
     if (position && locationName) {
-      setDeliveryLocation(position[0], position[1], locationName)
+      setDeliveryLocation(position.lat, position.lng, locationName)
       
       toast({
         title: "Location confirmed",
@@ -154,6 +188,8 @@ const DeliveryLocationPage = () => {
       navigate('/checkout-details')
     }
   }
+
+  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -194,31 +230,7 @@ const DeliveryLocationPage = () => {
           </CardContent>
         </Card>
 
-        {/* Search Location */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Search className="w-5 h-5" />
-              <span>Search Location</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Search for your location..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit()}
-                className="flex-1"
-              />
-              <Button onClick={handleSearchSubmit} disabled={!searchQuery.trim()}>
-                Search
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Map Area */}
+        {/* Google Maps */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -227,41 +239,63 @@ const DeliveryLocationPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
-              {isLoadingMap ? (
-                <div className="text-center">
-                  <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-green-600" />
-                  <p className="text-sm text-gray-600">Loading interactive map...</p>
-                </div>
-              ) : (
-                <div className="text-center p-8">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <MapPin className="w-8 h-8 text-green-600" />
-                  </div>
-                  <h3 className="font-semibold text-gray-900 mb-2">Interactive Map</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Google Maps integration will be available here.<br />
-                    Click anywhere to select your delivery location.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleMapClick(position[0] + 0.001, position[1] + 0.001)}
-                    >
-                      Mock Location A
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleMapClick(position[0] - 0.001, position[1] - 0.001)}
-                    >
-                      Mock Location B
-                    </Button>
+            <LoadScript 
+              googleMapsApiKey={GOOGLE_MAPS_API_KEY}
+              libraries={libraries}
+              loadingElement={
+                <div className="h-96 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                  <div className="text-center">
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-green-600" />
+                    <p className="text-sm text-gray-600">Loading Google Maps...</p>
                   </div>
                 </div>
-              )}
-            </div>
+              }
+            >
+              <div className="space-y-4">
+                {/* Search Input with Autocomplete */}
+                <div className="flex space-x-2">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Autocomplete
+                      onLoad={(autocomplete) => {
+                        autocompleteRef.current = autocomplete
+                      }}
+                      onPlaceChanged={onPlaceChanged}
+                    >
+                      <Input
+                        placeholder="Search for your location..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </Autocomplete>
+                  </div>
+                </div>
+
+                {/* Google Map */}
+                <div className="rounded-lg overflow-hidden border border-gray-200">
+                  <GoogleMap
+                    mapContainerStyle={mapContainerStyle}
+                    center={position}
+                    zoom={15}
+                    onLoad={handleMapLoad}
+                    onClick={handleMapClick}
+                    options={{
+                      zoomControl: true,
+                      streetViewControl: false,
+                      mapTypeControl: false,
+                      fullscreenControl: false,
+                    }}
+                  >
+                    <Marker
+                      position={position}
+                      draggable={true}
+                      onDragEnd={handleMarkerDragEnd}
+                    />
+                  </GoogleMap>
+                </div>
+              </div>
+            </LoadScript>
           </CardContent>
         </Card>
 
@@ -275,7 +309,7 @@ const DeliveryLocationPage = () => {
                   <h3 className="font-semibold text-blue-900">Selected Location</h3>
                   <p className="text-sm text-blue-700">{locationName}</p>
                   <p className="text-xs text-blue-600 mt-1">
-                    Coordinates: {position[0].toFixed(6)}, {position[1].toFixed(6)}
+                    Coordinates: {position.lat.toFixed(6)}, {position.lng.toFixed(6)}
                   </p>
                 </div>
               </div>

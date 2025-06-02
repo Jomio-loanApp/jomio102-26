@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useLocationStore } from '@/stores/locationStore'
 import { useCartStore } from '@/stores/cartStore'
@@ -38,12 +39,13 @@ const DeliveryLocationPage = () => {
   const [locationName, setLocationName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [useReticle, setUseReticle] = useState(true) // Mobile-first approach
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
   
   const mapRef = useRef<google.maps.Map | null>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const centerChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    // If no product is being added, still allow location selection
     getCurrentLocation()
   }, [])
 
@@ -54,7 +56,10 @@ const DeliveryLocationPage = () => {
   }
 
   const updateLocationName = async (lat: number, lng: number) => {
+    if (isUpdatingLocation) return
+    
     try {
+      setIsUpdatingLocation(true)
       console.log('Getting location name for:', lat, lng)
       
       // Try to call the edge function first
@@ -72,21 +77,29 @@ const DeliveryLocationPage = () => {
       }
       
       // Fallback to Google Geocoding API
-      const geocoder = new google.maps.Geocoder()
-      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-        if (status === 'OK' && results && results[0]) {
-          setLocationName(results[0].formatted_address)
-        } else {
-          // Final fallback
-          const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
-          setLocationName(fallbackName)
-        }
-      })
+      if (window.google && window.google.maps) {
+        const geocoder = new google.maps.Geocoder()
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          if (status === 'OK' && results && results[0]) {
+            setLocationName(results[0].formatted_address)
+          } else {
+            // Final fallback
+            const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+            setLocationName(fallbackName)
+          }
+        })
+      } else {
+        // Final fallback when Google is not available
+        const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+        setLocationName(fallbackName)
+      }
       
     } catch (error) {
       console.error('Error getting location name:', error)
       const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
       setLocationName(fallbackName)
+    } finally {
+      setIsUpdatingLocation(false)
     }
   }
 
@@ -144,22 +157,33 @@ const DeliveryLocationPage = () => {
     }
   }
 
-  const handleMapCenterChanged = () => {
-    if (useReticle && mapRef.current) {
-      const center = mapRef.current.getCenter()
+  const handleMapCenterChanged = useCallback(() => {
+    if (!useReticle || !mapRef.current || isUpdatingLocation) return
+    
+    // Clear any existing timeout
+    if (centerChangeTimeoutRef.current) {
+      clearTimeout(centerChangeTimeoutRef.current)
+    }
+    
+    // Debounce the center change handler
+    centerChangeTimeoutRef.current = setTimeout(() => {
+      const center = mapRef.current?.getCenter()
       if (center) {
         const lat = center.lat()
         const lng = center.lng()
         const newPosition = { lat, lng }
-        setPosition(newPosition)
-        // Debounce the location name update
-        const timeoutId = setTimeout(() => {
+        
+        // Only update if position actually changed significantly
+        const latDiff = Math.abs(lat - position.lat)
+        const lngDiff = Math.abs(lng - position.lng)
+        
+        if (latDiff > 0.0001 || lngDiff > 0.0001) {
+          setPosition(newPosition)
           updateLocationName(lat, lng)
-        }, 500)
-        return () => clearTimeout(timeoutId)
+        }
       }
-    }
-  }
+    }, 500)
+  }, [useReticle, position.lat, position.lng, isUpdatingLocation])
 
   const handleMarkerDragEnd = (event: google.maps.MapMouseEvent) => {
     if (event.latLng && !useReticle) {
@@ -361,11 +385,18 @@ const DeliveryLocationPage = () => {
 
         <Button
           onClick={handleConfirmLocation}
-          disabled={!locationName}
+          disabled={!locationName || isUpdatingLocation}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
           size="lg"
         >
-          {productToAdd ? 'Confirm Location & Add to Cart' : 'Confirm Location & Proceed'}
+          {isUpdatingLocation ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Getting location...
+            </>
+          ) : (
+            productToAdd ? 'Confirm Location & Add to Cart' : 'Confirm Location & Proceed'
+          )}
         </Button>
       </div>
     </div>

@@ -36,7 +36,7 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickView }) => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlistStore()
+  const { isInWishlist, addItem: addToWishlist, removeItem: removeFromWishlist } = useWishlistStore()
   
   const isWishlisted = isInWishlist(product.product_id)
 
@@ -72,6 +72,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
           product_id: product.product_id,
           name: product.name,
           price_string: product.price_string,
+          numeric_price: product.numeric_price,
+          unit_type: product.unit_type,
           image_url: product.image_url
         }
       }

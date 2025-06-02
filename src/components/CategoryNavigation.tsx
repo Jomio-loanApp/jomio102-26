@@ -16,6 +16,7 @@ interface CategoryNavigationProps {
 const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavigationProps) => {
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchCategories()
@@ -24,9 +25,10 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
   const fetchCategories = async () => {
     try {
       setIsLoading(true)
+      setError(null)
       console.log('Fetching categories...')
       
-      // Fixed query - only select existing columns
+      // Fixed query - only select existing columns, no filters for non-existent columns
       const { data, error } = await supabase
         .from('categories')
         .select('category_id, name, image_url')
@@ -40,12 +42,28 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
       }
       
       setCategories(data || [])
-    } catch (error) {
+      console.log('Categories loaded successfully:', data?.length || 0, 'categories')
+    } catch (error: any) {
       console.error('Error fetching categories:', error)
+      setError(error.message || 'Failed to load categories')
       setCategories([])
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-red-500 mb-2">Failed to load categories</div>
+        <button
+          onClick={fetchCategories}
+          className="text-sm text-green-600 hover:text-green-700 underline"
+        >
+          Try again
+        </button>
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -98,6 +116,12 @@ const CategoryNavigation = ({ onCategorySelect, selectedCategory }: CategoryNavi
                 src={category.image_url}
                 alt={category.name}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Fallback to emoji if image fails to load
+                  const target = e.target as HTMLImageElement
+                  target.style.display = 'none'
+                  target.parentElement!.innerHTML = '<span class="text-2xl flex items-center justify-center h-full">📦</span>'
+                }}
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">

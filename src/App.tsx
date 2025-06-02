@@ -11,6 +11,8 @@ import BottomNavigation from '@/components/BottomNavigation'
 import HomePage from '@/pages/HomePage'
 import CartPage from '@/pages/CartPage'
 import WishlistPage from '@/pages/WishlistPage'
+import DeliveryLocationPage from '@/pages/DeliveryLocationPage'
+import CheckoutDetailsPage from '@/pages/CheckoutDetailsPage'
 import CheckoutPage from '@/pages/CheckoutPage'
 import OrderConfirmationPage from '@/pages/OrderConfirmationPage'
 import ProfilePage from '@/pages/ProfilePage'
@@ -45,6 +47,8 @@ const App = () => {
               <Route path="/" element={<HomePage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/wishlist" element={<WishlistPage />} />
+              <Route path="/select-delivery-location" element={<DeliveryLocationPage />} />
+              <Route path="/checkout-details" element={<CheckoutDetailsPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
               <Route path="/profile" element={<ProfilePage />} />

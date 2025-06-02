@@ -6,11 +6,10 @@ import { supabase } from '@/lib/supabase'
 import { GoogleMap, LoadScript } from '@react-google-maps/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent } from '@/components/ui/card'
 import { ArrowLeft, Search, Navigation, Loader2, MapPin, AlertCircle } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
-const libraries: ("places")[] = ["places"]
+const libraries: ("places" | "geocoding")[] = ["places", "geocoding"]
 
 const mapContainerStyle = {
   width: '100%',
@@ -22,9 +21,25 @@ const defaultCenter = {
   lng: 77.5946
 }
 
+const mapOptions = {
+  zoomControl: false,
+  streetViewControl: false,
+  mapTypeControl: false,
+  fullscreenControl: false,
+  disableDefaultUI: true,
+  gestureHandling: 'greedy',
+  styles: [
+    {
+      featureType: 'poi',
+      elementType: 'labels',
+      stylers: [{ visibility: 'off' }]
+    }
+  ]
+}
+
 const DeliveryLocationPage = () => {
   const navigate = useNavigate()
-  const { setDeliveryLocation } = useLocationStore()
+  const { setDeliveryLocation, setLocationPermission, hasLocationPermission } = useLocationStore()
   
   const [position, setPosition] = useState(defaultCenter)
   const [isLocating, setIsLocating] = useState(false)
@@ -32,23 +47,43 @@ const DeliveryLocationPage = () => {
   const [locationName, setLocationName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
-  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false)
+  const [showLocationBanner, setShowLocationBanner] = useState(!hasLocationPermission)
   
   const mapRef = useRef<google.maps.Map | null>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const centerChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    // Don't automatically get location on page load, let user choose
+    // Check if geolocation is available
+    if (navigator.geolocation) {
+      navigator.permissions?.query({ name: 'geolocation' }).then((result) => {
+        if (result.state === 'granted') {
+          setLocationPermission(true)
+          setShowLocationBanner(false)
+        } else if (result.state === 'denied') {
+          setLocationPermission(false)
+          setShowLocationBanner(true)
+        }
+      })
+    }
     setIsLoadingMap(false)
-  }, [])
+  }, [setLocationPermission])
 
-  const handleMapLoad = (map: google.maps.Map) => {
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map
     setIsLoadingMap(false)
-    // Set initial position without getting location name immediately
-    setPosition(defaultCenter)
-  }
+    
+    // Initialize Places Autocomplete
+    if (searchInputRef.current && window.google?.maps?.places) {
+      autocompleteRef.current = new google.maps.places.Autocomplete(searchInputRef.current, {
+        types: ['establishment', 'geocode'],
+        componentRestrictions: { country: 'IN' }
+      })
+      
+      autocompleteRef.current.addListener('place_changed', onPlaceChanged)
+    }
+  }, [])
 
   const updateLocationName = async (lat: number, lng: number) => {
     if (isUpdatingLocation) return
@@ -57,7 +92,7 @@ const DeliveryLocationPage = () => {
       setIsUpdatingLocation(true)
       console.log('Getting location name for:', lat, lng)
       
-      // Try to call the edge function first
+      // Try edge function first
       try {
         const { data, error } = await supabase.functions.invoke('get-location-name', {
           body: { latitude: lat, longitude: lng }
@@ -72,12 +107,13 @@ const DeliveryLocationPage = () => {
       }
       
       // Fallback to Google Geocoding API
-      if (window.google && window.google.maps && window.google.maps.Geocoder) {
+      if (window.google?.maps?.Geocoder) {
         const geocoder = new google.maps.Geocoder()
         geocoder.geocode({ location: { lat, lng } }, (results, status) => {
           if (status === 'OK' && results && results[0]) {
             setLocationName(results[0].formatted_address)
           } else {
+            console.error('Geocoding failed:', status)
             const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
             setLocationName(fallbackName)
           }
@@ -98,7 +134,6 @@ const DeliveryLocationPage = () => {
 
   const getCurrentLocation = () => {
     setIsLocating(true)
-    setLocationPermissionDenied(false)
     
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -109,10 +144,13 @@ const DeliveryLocationPage = () => {
           setPosition(newPosition)
           updateLocationName(latitude, longitude)
           setIsLocating(false)
+          setLocationPermission(true)
+          setShowLocationBanner(false)
           
-          // Center map if loaded
+          // Center map
           if (mapRef.current) {
             mapRef.current.panTo(newPosition)
+            mapRef.current.setZoom(16)
           }
           
           toast({
@@ -123,10 +161,11 @@ const DeliveryLocationPage = () => {
         (error) => {
           console.error('Geolocation error:', error)
           setIsLocating(false)
-          setLocationPermissionDenied(true)
+          setLocationPermission(false)
+          setShowLocationBanner(true)
           toast({
             title: "Location access denied",
-            description: "Please select your location manually on the map or enable location access",
+            description: "Please select your location manually on the map",
             variant: "destructive"
           })
         },
@@ -138,10 +177,10 @@ const DeliveryLocationPage = () => {
       )
     } else {
       setIsLocating(false)
-      setLocationPermissionDenied(true)
+      setShowLocationBanner(true)
       toast({
         title: "Geolocation not supported",
-        description: "Please enter your address manually",
+        description: "Please select your location manually on the map",
         variant: "destructive"
       })
     }
@@ -150,12 +189,12 @@ const DeliveryLocationPage = () => {
   const handleMapCenterChanged = useCallback(() => {
     if (!mapRef.current || isUpdatingLocation) return
     
-    // Clear any existing timeout
+    // Clear existing timeout
     if (centerChangeTimeoutRef.current) {
       clearTimeout(centerChangeTimeoutRef.current)
     }
     
-    // Debounce the center change handler
+    // Debounce center change
     centerChangeTimeoutRef.current = setTimeout(() => {
       const center = mapRef.current?.getCenter()
       if (center) {
@@ -163,7 +202,7 @@ const DeliveryLocationPage = () => {
         const lng = center.lng()
         const newPosition = { lat, lng }
         
-        // Only update if position actually changed significantly
+        // Only update if position changed significantly
         const latDiff = Math.abs(lat - position.lat)
         const lngDiff = Math.abs(lng - position.lng)
         
@@ -189,6 +228,7 @@ const DeliveryLocationPage = () => {
         // Center map
         if (mapRef.current) {
           mapRef.current.panTo(newPosition)
+          mapRef.current.setZoom(16)
         }
         
         toast({
@@ -221,15 +261,15 @@ const DeliveryLocationPage = () => {
   const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q'
 
   return (
-    <div className="min-h-screen bg-white relative">
+    <div className="min-h-screen bg-white relative flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 relative z-50">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 relative z-50 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate(-1)}
-            className="p-2"
+            className="p-2 hover:bg-gray-100"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -238,32 +278,28 @@ const DeliveryLocationPage = () => {
       </div>
 
       {/* Search Bar */}
-      <div className="px-4 py-3 bg-white border-b border-gray-100 relative z-40">
-        <LoadScript 
-          googleMapsApiKey={GOOGLE_MAPS_API_KEY}
-          libraries={libraries}
-        >
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
-            <Input
-              placeholder="Search for a new area, locality..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
-            />
-          </div>
-        </LoadScript>
+      <div className="px-4 py-3 bg-white border-b border-gray-100 relative z-40 flex-shrink-0">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+          <Input
+            ref={searchInputRef}
+            placeholder="Search for a new area, locality..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
+          />
+        </div>
       </div>
 
-      {/* Device location not enabled banner */}
-      {locationPermissionDenied && (
-        <div className="px-4 py-2 bg-red-50 border-b border-red-100 relative z-40">
+      {/* Device location banner */}
+      {showLocationBanner && (
+        <div className="px-4 py-3 bg-red-50 border-b border-red-100 relative z-40 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <AlertCircle className="w-4 h-4 text-red-600" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-red-800">Device location not enabled</p>
                 <p className="text-xs text-red-600">Enable for a better delivery experience</p>
               </div>
@@ -271,16 +307,17 @@ const DeliveryLocationPage = () => {
             <Button
               onClick={getCurrentLocation}
               size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-green-600 hover:bg-green-700 text-white flex-shrink-0 ml-2"
+              disabled={isLocating}
             >
-              Enable
+              {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enable"}
             </Button>
           </div>
         </div>
       )}
 
       {/* Map Container */}
-      <div className="relative" style={{ height: locationPermissionDenied ? 'calc(100vh - 180px)' : 'calc(100vh - 140px)' }}>
+      <div className="flex-1 relative">
         <LoadScript 
           googleMapsApiKey={GOOGLE_MAPS_API_KEY}
           libraries={libraries}
@@ -299,42 +336,39 @@ const DeliveryLocationPage = () => {
             zoom={15}
             onLoad={handleMapLoad}
             onCenterChanged={handleMapCenterChanged}
-            options={{
-              zoomControl: false,
-              streetViewControl: false,
-              mapTypeControl: false,
-              fullscreenControl: false,
-              disableDefaultUI: true,
-              gestureHandling: 'greedy',
-            }}
+            options={mapOptions}
           >
             {/* Fixed center pin overlay */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
               <div className="relative">
-                {/* Pin icon */}
-                <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
-                  <div className="w-4 h-4 bg-white rounded-full"></div>
+                {/* Main pin */}
+                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                  <div className="w-3 h-3 bg-white rounded-full"></div>
                 </div>
-                <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black"></div>
+                {/* Pin stem */}
+                <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-6 border-transparent border-t-red-500"></div>
                 
-                {/* Tooltip */}
-                <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-3 py-2 rounded text-sm whitespace-nowrap">
-                  Your order will be delivered here
-                  <br />
-                  Move pin to your exact location
-                </div>
+                {/* Tooltip - only show initially */}
+                {!locationName && (
+                  <div className="absolute -top-20 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-3 py-2 rounded-lg text-xs whitespace-nowrap">
+                    Your order will be delivered here
+                    <br />
+                    Move pin to your exact location
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-black border-t-opacity-80"></div>
+                  </div>
+                )}
               </div>
             </div>
           </GoogleMap>
         </LoadScript>
 
-        {/* Use current location button - floating */}
-        <div className="absolute bottom-24 left-4 right-4 z-30">
+        {/* Use current location button - floating over map */}
+        <div className="absolute top-4 left-4 right-4 z-30">
           <Button
             onClick={getCurrentLocation}
             disabled={isLocating}
             variant="outline"
-            className="w-full bg-white border-gray-300 text-gray-700 shadow-lg"
+            className="w-full bg-white border-gray-300 text-gray-700 shadow-lg hover:bg-gray-50"
           >
             {isLocating ? (
               <>
@@ -352,16 +386,16 @@ const DeliveryLocationPage = () => {
       </div>
 
       {/* Bottom confirmation card */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-40">
-        <div className="space-y-3">
+      <div className="bg-white border-t border-gray-200 p-4 relative z-40 flex-shrink-0 safe-area-bottom">
+        <div className="space-y-4">
           <div className="text-sm text-gray-600">Delivering your order to</div>
           
           {locationName ? (
             <div className="flex items-start space-x-3">
-              <MapPin className="w-5 h-5 text-gray-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">{locationName}</p>
-                <div className="flex items-center space-x-2 mt-1">
+              <MapPin className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-gray-900 text-sm leading-tight">{locationName}</p>
+                <div className="flex items-center space-x-2 mt-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -369,24 +403,30 @@ const DeliveryLocationPage = () => {
                       setLocationName('')
                       setSearchQuery('')
                     }}
-                    className="text-xs"
+                    className="text-xs px-3 py-1 h-auto"
                   >
                     Change
                   </Button>
+                  {isUpdatingLocation && (
+                    <div className="flex items-center text-xs text-gray-500">
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      Updating...
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           ) : (
             <div className="flex items-center space-x-3 text-gray-500">
-              <MapPin className="w-5 h-5" />
-              <span>Move the map to select your location</span>
+              <MapPin className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm">Move the map to select your location</span>
             </div>
           )}
 
           <Button
             onClick={handleConfirmLocation}
             disabled={!locationName || isUpdatingLocation}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 text-base"
             size="lg"
           >
             {isUpdatingLocation ? (

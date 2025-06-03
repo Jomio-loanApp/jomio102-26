@@ -48,9 +48,10 @@ const DeliveryLocationPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
   const [showLocationBanner, setShowLocationBanner] = useState(!hasLocationPermission)
+  const [locationError, setLocationError] = useState('')
   
   const mapRef = useRef<google.maps.Map | null>(null)
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const autocompleteElementRef = useRef<google.maps.places.PlaceAutocompleteElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const centerChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -74,14 +75,26 @@ const DeliveryLocationPage = () => {
     mapRef.current = map
     setIsLoadingMap(false)
     
-    // Initialize Places Autocomplete
-    if (searchInputRef.current && window.google?.maps?.places) {
-      autocompleteRef.current = new google.maps.places.Autocomplete(searchInputRef.current, {
-        types: ['establishment', 'geocode'],
-        componentRestrictions: { country: 'IN' }
-      })
-      
-      autocompleteRef.current.addListener('place_changed', onPlaceChanged)
+    // Initialize new PlaceAutocompleteElement
+    if (searchInputRef.current && window.google?.maps?.places?.PlaceAutocompleteElement) {
+      try {
+        autocompleteElementRef.current = new google.maps.places.PlaceAutocompleteElement({
+          componentRestrictions: { country: 'IN' },
+          types: ['establishment', 'geocode']
+        })
+        
+        // Set up the autocomplete element
+        autocompleteElementRef.current.addEventListener('gmp-placeselect', onPlaceChanged)
+        
+        // Connect to input
+        if (searchInputRef.current.parentNode) {
+          searchInputRef.current.parentNode.insertBefore(autocompleteElementRef.current, searchInputRef.current.nextSibling)
+          searchInputRef.current.style.display = 'none'
+        }
+      } catch (error) {
+        console.error('Error initializing PlaceAutocompleteElement:', error)
+        // Fallback to regular input
+      }
     }
   }, [])
 
@@ -90,41 +103,44 @@ const DeliveryLocationPage = () => {
     
     try {
       setIsUpdatingLocation(true)
+      setLocationError('')
       console.log('Getting location name for:', lat, lng)
       
-      // Try edge function first
-      try {
-        const { data, error } = await supabase.functions.invoke('get-location-name', {
-          body: { latitude: lat, longitude: lng }
-        })
-        
-        if (!error && data?.location_name) {
-          setLocationName(data.location_name)
-          return
-        }
-      } catch (edgeFunctionError) {
-        console.log('Edge function call failed, trying Google Geocoding:', edgeFunctionError)
+      // Call Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('get-location-name', {
+        body: { latitude: lat, longitude: lng }
+      })
+      
+      if (error) {
+        console.error('Edge function error:', error)
+        throw error
       }
       
-      // Fallback to Google Geocoding API
-      if (window.google?.maps?.Geocoder) {
-        const geocoder = new google.maps.Geocoder()
-        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-          if (status === 'OK' && results && results[0]) {
-            setLocationName(results[0].formatted_address)
-          } else {
-            console.error('Geocoding failed:', status)
-            const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
-            setLocationName(fallbackName)
-          }
-        })
+      if (data?.delivery_location_name) {
+        setLocationName(data.delivery_location_name)
+        console.log('Location name received:', data.delivery_location_name)
       } else {
-        const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
-        setLocationName(fallbackName)
+        // Fallback to Google Geocoding API directly
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new google.maps.Geocoder()
+          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === 'OK' && results && results[0]) {
+              setLocationName(results[0].formatted_address)
+            } else {
+              console.error('Geocoding failed:', status)
+              const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+              setLocationName(fallbackName)
+            }
+          })
+        } else {
+          const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+          setLocationName(fallbackName)
+        }
       }
       
     } catch (error) {
       console.error('Error getting location name:', error)
+      setLocationError('Could not determine address. Please try a different location.')
       const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
       setLocationName(fallbackName)
     } finally {
@@ -214,28 +230,26 @@ const DeliveryLocationPage = () => {
     }, 1000)
   }, [position.lat, position.lng, isUpdatingLocation])
 
-  const onPlaceChanged = () => {
-    if (autocompleteRef.current) {
-      const place = autocompleteRef.current.getPlace()
-      if (place.geometry && place.geometry.location) {
-        const lat = place.geometry.location.lat()
-        const lng = place.geometry.location.lng()
-        const newPosition = { lat, lng }
-        setPosition(newPosition)
-        setLocationName(place.formatted_address || place.name || '')
-        setSearchQuery(place.formatted_address || place.name || '')
-        
-        // Center map
-        if (mapRef.current) {
-          mapRef.current.panTo(newPosition)
-          mapRef.current.setZoom(16)
-        }
-        
-        toast({
-          title: "Location found",
-          description: `Using: ${place.formatted_address || place.name}`,
-        })
+  const onPlaceChanged = (event: any) => {
+    const place = event.detail.place
+    if (place.geometry && place.geometry.location) {
+      const lat = place.geometry.location.lat()
+      const lng = place.geometry.location.lng()
+      const newPosition = { lat, lng }
+      setPosition(newPosition)
+      setLocationName(place.formatted_address || place.name || '')
+      setSearchQuery(place.formatted_address || place.name || '')
+      
+      // Center map
+      if (mapRef.current) {
+        mapRef.current.panTo(newPosition)
+        mapRef.current.setZoom(16)
       }
+      
+      toast({
+        title: "Location found",
+        description: `Using: ${place.formatted_address || place.name}`,
+      })
     }
   }
 
@@ -312,6 +326,16 @@ const DeliveryLocationPage = () => {
             >
               {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enable"}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Location Error Banner */}
+      {locationError && (
+        <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-100 relative z-40 flex-shrink-0">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+            <p className="text-sm text-yellow-800">{locationError}</p>
           </div>
         </div>
       )}
@@ -402,6 +426,7 @@ const DeliveryLocationPage = () => {
                     onClick={() => {
                       setLocationName('')
                       setSearchQuery('')
+                      setLocationError('')
                     }}
                     className="text-xs px-3 py-1 h-auto"
                   >

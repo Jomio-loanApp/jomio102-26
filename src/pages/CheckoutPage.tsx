@@ -44,6 +44,8 @@ const CheckoutPage = () => {
   // UI states
   const [isLoading, setIsLoading] = useState(true)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false)
+  const [isCalculatingCharge, setIsCalculatingCharge] = useState(false)
   const [deliveryOptionsError, setDeliveryOptionsError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -116,8 +118,9 @@ const CheckoutPage = () => {
 
   const fetchDeliveryOptions = async () => {
     try {
-      console.log('CheckoutPage: Fetching delivery options...')
+      setIsLoadingOptions(true)
       setDeliveryOptionsError(null)
+      console.log('CheckoutPage: Fetching delivery options...')
       
       const { data, error } = await supabase.functions.invoke('get-available-delivery-options')
       
@@ -126,13 +129,27 @@ const CheckoutPage = () => {
         throw error
       }
       
-      console.log('CheckoutPage: Delivery options fetched:', data)
-      setDeliveryOptions(data || [])
+      console.log('CheckoutPage: Delivery options response:', data)
+      
+      // Robust array handling to fix "y.map is not a function" error
+      let optionsArray: DeliveryOption[] = []
+      
+      if (Array.isArray(data)) {
+        optionsArray = data
+      } else if (data && typeof data === 'object') {
+        // If it's a single object, wrap it in an array
+        optionsArray = [data]
+      } else {
+        throw new Error('Invalid delivery options format')
+      }
+      
+      setDeliveryOptions(optionsArray)
       
       // Auto-select first option if available
-      if (data && data.length > 0) {
-        setSelectedDeliveryOption(data[0].type)
+      if (optionsArray.length > 0) {
+        setSelectedDeliveryOption(optionsArray[0].type)
       }
+      
     } catch (error) {
       console.error('Error fetching delivery options:', error)
       setDeliveryOptionsError('Failed to load delivery options. Using default options.')
@@ -146,6 +163,8 @@ const CheckoutPage = () => {
       console.log('CheckoutPage: Using fallback delivery options:', fallbackOptions)
       setDeliveryOptions(fallbackOptions)
       setSelectedDeliveryOption('instant')
+    } finally {
+      setIsLoadingOptions(false)
     }
   }
 
@@ -153,9 +172,14 @@ const CheckoutPage = () => {
     if (!deliveryLat || !deliveryLng) return
 
     try {
+      setIsCalculatingCharge(true)
       console.log('CheckoutPage: Calculating delivery charge for location:', { deliveryLat, deliveryLng })
+      
       const { data, error } = await supabase.functions.invoke('calculate-delivery-charge', {
-        body: { p_customer_lat: deliveryLat, p_customer_lon: deliveryLng }
+        body: { 
+          p_customer_lat: deliveryLat, 
+          p_customer_lon: deliveryLng 
+        }
       })
       
       if (error) {
@@ -163,13 +187,27 @@ const CheckoutPage = () => {
         throw error
       }
       
-      console.log('CheckoutPage: Delivery charge calculated:', data)
-      setDeliveryCharge(data?.delivery_charge || 0)
+      console.log('CheckoutPage: Delivery charge response:', data)
+      
+      if (data && typeof data.delivery_charge === 'number') {
+        setDeliveryCharge(data.delivery_charge)
+      } else {
+        throw new Error('Invalid delivery charge response format')
+      }
+      
     } catch (error) {
       console.error('Error calculating delivery charge:', error)
       const fallbackCharge = 20
       console.log('CheckoutPage: Using fallback delivery charge:', fallbackCharge)
       setDeliveryCharge(fallbackCharge)
+      
+      toast({
+        title: "Could not calculate delivery charge",
+        description: "Using standard delivery charge.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsCalculatingCharge(false)
     }
   }
 
@@ -180,68 +218,87 @@ const CheckoutPage = () => {
     try {
       const finalDeliveryCharge = selectedDeliveryOption === 'instant' ? deliveryCharge : 0
       
-      const orderData = {
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        delivery_latitude: deliveryLat,
-        delivery_longitude: deliveryLng,
-        delivery_location_name: deliveryLocationName,
-        delivery_type: selectedDeliveryOption,
-        customer_notes: customerNotes,
-        payment_method: 'COD',
-        items: items.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
-          product_name_at_purchase: item.name,
-          product_image_at_purchase: item.image_url,
-        })),
-        items_subtotal: getSubtotal(),
-        delivery_charge: finalDeliveryCharge,
-        total_amount: getSubtotal() + finalDeliveryCharge,
-      }
+      // Prepare cart data in the exact format expected by Edge Functions
+      const cartData = items.map(item => ({
+        product_id: parseInt(item.product_id),
+        quantity: item.quantity
+      }))
 
-      console.log('CheckoutPage: Order data prepared:', orderData)
-
-      let result
       if (user) {
-        console.log('CheckoutPage: User is authenticated, creating authenticated order')
-        // Try to call create-authenticated-order, fallback to guest order
-        try {
-          result = await supabase.functions.invoke('create-authenticated-order', {
-            body: orderData
-          })
-        } catch (authOrderError) {
-          console.log('Authenticated order failed, falling back to guest order:', authOrderError)
-          result = await supabase.functions.invoke('create-guest-order', {
-            body: orderData
-          })
+        // Authenticated order payload with exact parameter names
+        const orderData = {
+          p_delivery_lat: deliveryLat,
+          p_delivery_lon: deliveryLng,
+          p_delivery_location_name: deliveryLocationName,
+          p_delivery_type: selectedDeliveryOption,
+          p_cart: cartData,
+          p_customer_notes: customerNotes || ''
         }
-      } else {
-        console.log('CheckoutPage: User is guest, creating guest order')
-        result = await supabase.functions.invoke('create-guest-order', {
+
+        console.log('CheckoutPage: Creating authenticated order with data:', orderData)
+
+        const { data, error } = await supabase.functions.invoke('create-authenticated-order', {
           body: orderData
         })
-      }
 
-      if (result.error) {
-        console.error('CheckoutPage: Order creation failed:', result.error)
-        throw result.error
-      }
+        if (error) {
+          console.error('CheckoutPage: Authenticated order creation failed:', error)
+          throw error
+        }
 
-      console.log('CheckoutPage: Order created successfully:', result.data)
-      clearCart()
-      navigate(`/order-confirmation/${result.data.order_id}`)
+        console.log('CheckoutPage: Authenticated order created successfully:', data)
+        clearCart()
+        navigate(`/order-confirmation/${data.order_id}`)
+        
+      } else {
+        // Guest order payload with exact parameter names
+        const orderData = {
+          p_name: customerName,
+          p_phone: customerPhone,
+          p_delivery_lat: deliveryLat,
+          p_delivery_lon: deliveryLng,
+          p_delivery_location_name: deliveryLocationName,
+          p_delivery_type: selectedDeliveryOption,
+          p_cart: cartData
+        }
+
+        console.log('CheckoutPage: Creating guest order with data:', orderData)
+
+        const { data, error } = await supabase.functions.invoke('create-guest-order', {
+          body: orderData
+        })
+
+        if (error) {
+          console.error('CheckoutPage: Guest order creation failed:', error)
+          throw error
+        }
+
+        console.log('CheckoutPage: Guest order created successfully:', data)
+        clearCart()
+        navigate(`/order-confirmation/${data.order_id}`)
+      }
       
       toast({
         title: "Order placed successfully!",
         description: "Thank you for your order. You will receive updates soon.",
       })
+      
     } catch (error) {
       console.error('Error placing order:', error)
+      let errorMessage = "Failed to place your order. Please try again."
+      
+      // More specific error messages based on error type
+      if (error.message?.includes('401')) {
+        errorMessage = "Please log in again to place your order."
+      } else if (error.message?.includes('400')) {
+        errorMessage = "Please check your order details and try again."
+      } else if (error.message?.includes('500')) {
+        errorMessage = "Server error. Please try again in a moment."
+      }
+      
       toast({
         title: "Order failed",
-        description: "Failed to place your order. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -388,6 +445,7 @@ const CheckoutPage = () => {
                 <CardTitle className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">3</div>
                   <span>Delivery Options</span>
+                  {isLoadingOptions && <Loader2 className="w-4 h-4 animate-spin" />}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
@@ -397,22 +455,40 @@ const CheckoutPage = () => {
                     <AlertDescription className="text-yellow-700">{deliveryOptionsError}</AlertDescription>
                   </Alert>
                 )}
-                <RadioGroup value={selectedDeliveryOption} onValueChange={setSelectedDeliveryOption}>
-                  {deliveryOptions.map((option) => (
-                    <div key={option.type} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                      <RadioGroupItem value={option.type} id={option.type} className="text-green-600" />
-                      <div className="flex-1">
-                        <label htmlFor={option.type} className="font-medium cursor-pointer text-gray-900">
-                          {option.label}
-                        </label>
-                        {option.type === 'instant' && selectedDeliveryOption === 'instant' && deliveryCharge > 0 && (
-                          <p className="text-sm text-gray-600">₹{deliveryCharge} delivery charge</p>
-                        )}
+                
+                {isLoadingOptions ? (
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
+                    ))}
+                  </div>
+                ) : (
+                  <RadioGroup value={selectedDeliveryOption} onValueChange={setSelectedDeliveryOption}>
+                    {deliveryOptions.map((option) => (
+                      <div key={option.type} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <RadioGroupItem value={option.type} id={option.type} className="text-green-600" />
+                        <div className="flex-1">
+                          <label htmlFor={option.type} className="font-medium cursor-pointer text-gray-900">
+                            {option.label}
+                          </label>
+                          {option.type === 'instant' && selectedDeliveryOption === 'instant' && (
+                            <div className="flex items-center space-x-2 mt-1">
+                              {isCalculatingCharge ? (
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  Calculating charge...
+                                </div>
+                              ) : deliveryCharge > 0 ? (
+                                <p className="text-sm text-gray-600">₹{deliveryCharge} delivery charge</p>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+                        <Clock className="w-5 h-5 text-gray-400" />
                       </div>
-                      <Clock className="w-5 h-5 text-gray-400" />
-                    </div>
-                  ))}
-                </RadioGroup>
+                    ))}
+                  </RadioGroup>
+                )}
               </CardContent>
             </Card>
 
@@ -467,7 +543,13 @@ const CheckoutPage = () => {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Delivery:</span>
-                    <span className="font-medium">₹{finalDeliveryCharge.toFixed(2)}</span>
+                    <span className="font-medium">
+                      {isCalculatingCharge ? (
+                        <Loader2 className="w-3 h-3 animate-spin inline" />
+                      ) : (
+                        `₹${finalDeliveryCharge.toFixed(2)}`
+                      )}
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-bold text-lg">
@@ -501,7 +583,7 @@ const CheckoutPage = () => {
                 {/* Place Order Button */}
                 <Button
                   onClick={handlePlaceOrder}
-                  disabled={!canProceed || isPlacingOrder}
+                  disabled={!canProceed || isPlacingOrder || isCalculatingCharge}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
                   size="lg"
                 >

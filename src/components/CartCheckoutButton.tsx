@@ -13,8 +13,8 @@ const CartCheckoutButton = () => {
       return
     }
     
-    // Navigate to location selection first
-    navigate('/select-delivery-location')
+    // Navigate to location selection first as per revised flow
+    navigate('/set-delivery-location')
   }
 
   const subtotal = getSubtotal()

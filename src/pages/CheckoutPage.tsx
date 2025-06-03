@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -59,7 +58,7 @@ const CheckoutPage = () => {
 
     if (!deliveryLat || !deliveryLng) {
       console.log('CheckoutPage: No delivery location set, redirecting to location selection')
-      navigate('/select-delivery-location')
+      navigate('/set-delivery-location')
       return
     }
     
@@ -84,9 +83,9 @@ const CheckoutPage = () => {
       ])
 
       // Pre-fill customer info if logged in
-      if (user) {
-        setCustomerName(profile?.full_name || '')
-        setCustomerPhone(profile?.phone_number || '')
+      if (user && profile) {
+        setCustomerName(profile.full_name || '')
+        setCustomerPhone(profile.phone_number || '')
       }
     } catch (error) {
       console.error('Error initializing checkout:', error)
@@ -131,21 +130,23 @@ const CheckoutPage = () => {
       
       console.log('CheckoutPage: Delivery options response:', data)
       
-      // Robust array handling to fix "y.map is not a function" error
+      // Robust array handling
       let optionsArray: DeliveryOption[] = []
       
       if (Array.isArray(data)) {
         optionsArray = data
       } else if (data && typeof data === 'object') {
-        // If it's a single object, wrap it in an array
-        optionsArray = [data]
+        if (data.delivery_options && Array.isArray(data.delivery_options)) {
+          optionsArray = data.delivery_options
+        } else {
+          optionsArray = [data]
+        }
       } else {
         throw new Error('Invalid delivery options format')
       }
       
       setDeliveryOptions(optionsArray)
       
-      // Auto-select first option if available
       if (optionsArray.length > 0) {
         setSelectedDeliveryOption(optionsArray[0].type)
       }
@@ -154,7 +155,6 @@ const CheckoutPage = () => {
       console.error('Error fetching delivery options:', error)
       setDeliveryOptionsError('Failed to load delivery options. Using default options.')
       
-      // Fallback options
       const fallbackOptions = [
         { type: 'instant', label: 'Instant Delivery (30-45 min)', charge: 0 },
         { type: 'morning', label: 'Morning Delivery (Tomorrow 7 AM - 9 AM)', charge: 0 },
@@ -218,21 +218,31 @@ const CheckoutPage = () => {
     try {
       const finalDeliveryCharge = selectedDeliveryOption === 'instant' ? deliveryCharge : 0
       
-      // Prepare cart data in the exact format expected by Edge Functions
+      // Prepare cart data
       const cartData = items.map(item => ({
         product_id: parseInt(item.product_id),
         quantity: item.quantity
       }))
 
+      console.log('CheckoutPage: Order data prepared:', {
+        user: !!user,
+        cartData,
+        deliveryInfo: { deliveryLat, deliveryLng, deliveryLocationName },
+        deliveryType: selectedDeliveryOption,
+        deliveryCharge: finalDeliveryCharge
+      })
+
       if (user) {
-        // Authenticated order payload with exact parameter names
+        // Authenticated order
+        console.log('CheckoutPage: User is authenticated, creating authenticated order')
+        
         const orderData = {
           p_delivery_lat: deliveryLat,
           p_delivery_lon: deliveryLng,
           p_delivery_location_name: deliveryLocationName,
           p_delivery_type: selectedDeliveryOption,
           p_cart: cartData,
-          p_customer_notes: customerNotes || ''
+          p_customer_notes: customerNotes || null
         }
 
         console.log('CheckoutPage: Creating authenticated order with data:', orderData)
@@ -247,11 +257,27 @@ const CheckoutPage = () => {
         }
 
         console.log('CheckoutPage: Authenticated order created successfully:', data)
-        clearCart()
-        navigate(`/order-confirmation/${data.order_id}`)
+        
+        if (data && data.order_id) {
+          clearCart()
+          navigate(`/order-confirmation/${data.order_id}`)
+          
+          toast({
+            title: "Order placed successfully!",
+            description: "Thank you for your order. You will receive updates soon.",
+          })
+        } else {
+          throw new Error('Order created but no order ID returned')
+        }
         
       } else {
-        // Guest order payload with exact parameter names
+        // Guest order
+        console.log('CheckoutPage: User is guest, creating guest order')
+        
+        if (!customerName || !customerPhone) {
+          throw new Error('Customer name and phone are required for guest orders')
+        }
+        
         const orderData = {
           p_name: customerName,
           p_phone: customerPhone,
@@ -274,26 +300,32 @@ const CheckoutPage = () => {
         }
 
         console.log('CheckoutPage: Guest order created successfully:', data)
-        clearCart()
-        navigate(`/order-confirmation/${data.order_id}`)
+        
+        if (data && data.order_id) {
+          clearCart()
+          navigate(`/order-confirmation/${data.order_id}`)
+          
+          toast({
+            title: "Order placed successfully!",
+            description: "Thank you for your order. You will receive updates soon.",
+          })
+        } else {
+          throw new Error('Order created but no order ID returned')
+        }
       }
       
-      toast({
-        title: "Order placed successfully!",
-        description: "Thank you for your order. You will receive updates soon.",
-      })
-      
     } catch (error) {
-      console.error('Error placing order:', error)
+      console.error('CheckoutPage: Order creation failed:', error)
       let errorMessage = "Failed to place your order. Please try again."
       
-      // More specific error messages based on error type
       if (error.message?.includes('401')) {
         errorMessage = "Please log in again to place your order."
       } else if (error.message?.includes('400')) {
         errorMessage = "Please check your order details and try again."
       } else if (error.message?.includes('500')) {
         errorMessage = "Server error. Please try again in a moment."
+      } else if (error.message?.includes('Customer name')) {
+        errorMessage = "Please enter your name and phone number."
       }
       
       toast({
@@ -431,7 +463,7 @@ const CheckoutPage = () => {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => navigate('/select-delivery-location')}
+                    onClick={() => navigate('/set-delivery-location')}
                   >
                     Change
                   </Button>

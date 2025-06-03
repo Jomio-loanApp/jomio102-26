@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { MapPin, Navigation, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 interface LocationSelectorProps {
   onLocationSelect: (lat: number, lng: number, locationName: string) => void
@@ -11,34 +12,69 @@ interface LocationSelectorProps {
 
 const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition }: LocationSelectorProps) => {
   const [position, setPosition] = useState<[number, number]>(
-    selectedPosition || initialPosition || [12.9716, 77.5946] // Bangalore as default
+    selectedPosition || initialPosition || [12.9716, 77.5946]
   )
   const [isLocating, setIsLocating] = useState(false)
   const [locationName, setLocationName] = useState('')
   const [manualAddress, setManualAddress] = useState('')
+  const [isGettingLocationName, setIsGettingLocationName] = useState(false)
   const mapRef = useRef<any>(null)
   const mapInstanceRef = useRef<any>(null)
+
+  const getLocationName = async (lat: number, lng: number) => {
+    setIsGettingLocationName(true)
+    try {
+      console.log('Getting location name for:', lat, lng)
+      
+      // Try Supabase Edge Function first
+      const { data, error } = await supabase.functions.invoke('get-location-name', {
+        body: { latitude: lat, longitude: lng }
+      })
+      
+      if (error) {
+        console.error('Edge function error:', error)
+        throw error
+      }
+      
+      if (data?.delivery_location_name) {
+        return data.delivery_location_name
+      } else {
+        throw new Error('No location name returned')
+      }
+    } catch (error) {
+      console.error('Error getting location name from Edge Function:', error)
+      
+      // Fallback to direct geocoding if available
+      if (window.google?.maps?.Geocoder) {
+        return new Promise<string>((resolve) => {
+          const geocoder = new google.maps.Geocoder()
+          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === 'OK' && results && results[0]) {
+              resolve(results[0].formatted_address)
+            } else {
+              resolve(`Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`)
+            }
+          })
+        })
+      } else {
+        return `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      }
+    } finally {
+      setIsGettingLocationName(false)
+    }
+  }
 
   const handleLocationChange = async (lat: number, lng: number) => {
     try {
       console.log('Location changed to:', lat, lng)
       setPosition([lat, lng])
       
-      // For now, create a mock location name since get-location-name function might not be available
-      const mockLocationName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
-      setLocationName(mockLocationName)
-      onLocationSelect(lat, lng, mockLocationName)
+      const name = await getLocationName(lat, lng)
+      setLocationName(name)
+      onLocationSelect(lat, lng, name)
       
-      // TODO: Replace with actual Edge Function call when available
-      // const { data, error } = await supabase.functions.invoke('get-location-name', {
-      //   body: { latitude: lat, longitude: lng }
-      // })
-      // if (!error && data?.location_name) {
-      //   setLocationName(data.location_name)
-      //   onLocationSelect(lat, lng, data.location_name)
-      // }
     } catch (error) {
-      console.error('Error getting location name:', error)
+      console.error('Error handling location change:', error)
       const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
       setLocationName(fallbackName)
       onLocationSelect(lat, lng, fallbackName)
@@ -63,7 +99,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 300000, // 5 minutes
+          maximumAge: 300000,
         }
       )
     } else {
@@ -76,7 +112,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     if (manualAddress.trim()) {
       const mockLocation = 'Manual Address: ' + manualAddress.trim()
       setLocationName(mockLocation)
-      // Use current position coordinates for manual address - in real app this would be geocoded
       onLocationSelect(position[0], position[1], mockLocation)
     }
   }
@@ -85,11 +120,9 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   useEffect(() => {
     const initializeMap = async () => {
       try {
-        // Dynamically import Leaflet to avoid SSR issues
         const L = await import('leaflet')
         await import('leaflet/dist/leaflet.css')
 
-        // Fix for default markers
         delete (L.Icon.Default.prototype as any)._getIconUrl
         L.Icon.Default.mergeOptions({
           iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -98,18 +131,14 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         })
 
         if (mapRef.current && !mapInstanceRef.current) {
-          // Create map instance
           mapInstanceRef.current = L.map(mapRef.current).setView(position, 15)
 
-          // Add tile layer
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }).addTo(mapInstanceRef.current)
 
-          // Add marker
           const marker = L.marker(position).addTo(mapInstanceRef.current)
 
-          // Handle map clicks
           mapInstanceRef.current.on('click', (e: any) => {
             const { lat, lng } = e.latlng
             marker.setLatLng([lat, lng])
@@ -123,7 +152,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
     initializeMap()
 
-    // Cleanup function
     return () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove()
@@ -132,7 +160,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     }
   }, [])
 
-  // Update map when position changes
+  // Update map when position changes externally
   useEffect(() => {
     if (mapInstanceRef.current && selectedPosition) {
       setPosition(selectedPosition)
@@ -166,9 +194,19 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       {/* Map container */}
       <div 
         ref={mapRef}
-        className="h-64 md:h-80 rounded-lg overflow-hidden border bg-gray-100"
+        className="h-64 md:h-80 rounded-lg overflow-hidden border bg-gray-100 relative"
         style={{ minHeight: '256px' }}
       >
+        {/* Loading overlay */}
+        {isGettingLocationName && (
+          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+            <div className="bg-white p-3 rounded-lg flex items-center space-x-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Getting location...</span>
+            </div>
+          </div>
+        )}
+        
         {/* Fallback content while map loads */}
         <div className="h-full flex items-center justify-center text-center text-gray-500">
           <div>

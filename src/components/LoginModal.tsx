@@ -15,9 +15,10 @@ import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
 interface LoginModalProps {
   isOpen: boolean
   onClose: () => void
+  onSuccess?: () => void
 }
 
-const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
+const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   const { signIn, signUp } = useAuthStore()
   const { items: cartItems, clearCart } = useCartStore()
   const { items: wishlistItems, clearWishlist } = useWishlistStore()
@@ -39,6 +40,13 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
 
   const [showMergePrompt, setShowMergePrompt] = useState(false)
 
+  const resetForm = () => {
+    setError(null)
+    setIsLoading(false)
+    setLoginData({ email: '', password: '' })
+    setSignupData({ email: '', password: '', fullName: '', phoneNumber: '' })
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -53,7 +61,9 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
       if (cartItems.length > 0 || wishlistItems.length > 0) {
         setShowMergePrompt(true)
       } else {
+        resetForm()
         onClose()
+        onSuccess?.()
         toast({
           title: "Welcome back!",
           description: "You have successfully logged in.",
@@ -68,7 +78,6 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
         variant: "destructive",
       })
     } finally {
-      console.log('LoginModal: Resetting loading state')
       setIsLoading(false)
     }
   }
@@ -87,7 +96,9 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
       if (cartItems.length > 0 || wishlistItems.length > 0) {
         setShowMergePrompt(true)
       } else {
+        resetForm()
         onClose()
+        onSuccess?.()
         toast({
           title: "Account created!",
           description: "Please check your email to verify your account.",
@@ -102,7 +113,6 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
         variant: "destructive",
       })
     } finally {
-      console.log('LoginModal: Resetting loading state')
       setIsLoading(false)
     }
   }
@@ -114,7 +124,9 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
     }
     
     setShowMergePrompt(false)
+    resetForm()
     onClose()
+    onSuccess?.()
     
     toast({
       title: merge ? "Data merged!" : "Welcome!",
@@ -124,17 +136,14 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
     })
   }
 
-  // Reset form when modal closes or tab changes
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setError(null)
-    setIsLoading(false)
   }
 
   const handleModalClose = () => {
     if (!isLoading) {
-      setError(null)
-      setIsLoading(false)
+      resetForm()
       setShowMergePrompt(false)
       onClose()
     }

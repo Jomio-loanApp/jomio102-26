@@ -16,6 +16,8 @@ import CheckoutDetailsPage from '@/pages/CheckoutDetailsPage'
 import CheckoutPage from '@/pages/CheckoutPage'
 import OrderConfirmationPage from '@/pages/OrderConfirmationPage'
 import ProfilePage from '@/pages/ProfilePage'
+import AddressesPage from '@/pages/AddressesPage'
+import ProfileEditPage from '@/pages/ProfileEditPage'
 import NotFound from './pages/NotFound'
 
 const queryClient = new QueryClient()
@@ -25,7 +27,12 @@ const ConditionalBottomNavigation = () => {
   const location = useLocation()
   
   // Don't show bottom navigation on these pages
-  const hideBottomNavPages = ['/select-delivery-location', '/set-delivery-location']
+  const hideBottomNavPages = [
+    '/select-delivery-location', 
+    '/set-delivery-location',
+    '/profile/addresses',
+    '/profile/edit'
+  ]
   
   if (hideBottomNavPages.includes(location.pathname)) {
     return null
@@ -36,7 +43,7 @@ const ConditionalBottomNavigation = () => {
 
 const App = () => {
   const [showSplash, setShowSplash] = useState(true)
-  const { initialize } = useAuthStore()
+  const { initialize, isInitialized } = useAuthStore()
 
   useEffect(() => {
     initialize()
@@ -46,7 +53,8 @@ const App = () => {
     setShowSplash(false)
   }
 
-  if (showSplash) {
+  // Show splash screen until auth is initialized
+  if (showSplash || !isInitialized) {
     return <SplashScreen onComplete={handleSplashComplete} />
   }
 
@@ -66,7 +74,8 @@ const App = () => {
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/profile/*" element={<ProfilePage />} />
+              <Route path="/profile/addresses" element={<AddressesPage />} />
+              <Route path="/profile/edit" element={<ProfileEditPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <ConditionalBottomNavigation />

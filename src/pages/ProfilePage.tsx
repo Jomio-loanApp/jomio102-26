@@ -34,19 +34,22 @@ const ProfilePage = () => {
       icon: Package,
       title: 'Order History',
       description: 'View your past orders and track current ones',
-      path: '/profile/orders'
+      path: '/profile/orders',
+      available: false // Will implement later
     },
     {
       icon: MapPin,
       title: 'Saved Addresses',
       description: 'Manage your delivery addresses',
-      path: '/profile/addresses'
+      path: '/profile/addresses',
+      available: true
     },
     {
       icon: Edit,
       title: 'Edit Profile',
       description: 'Update your personal information',
-      path: '/profile/edit'
+      path: '/profile/edit',
+      available: true
     },
   ]
 
@@ -77,10 +80,13 @@ const ProfilePage = () => {
           {/* Menu Items */}
           <div className="grid gap-4">
             {menuItems.map((item) => (
-              <Card key={item.path} className="cursor-pointer hover:shadow-md transition-shadow">
+              <Card 
+                key={item.path} 
+                className={`${item.available ? 'cursor-pointer hover:shadow-md transition-shadow' : 'opacity-50'}`}
+              >
                 <CardContent 
                   className="p-6"
-                  onClick={() => navigate(item.path)}
+                  onClick={() => item.available && navigate(item.path)}
                 >
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -89,12 +95,17 @@ const ProfilePage = () => {
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{item.title}</h3>
                       <p className="text-sm text-gray-600">{item.description}</p>
+                      {!item.available && (
+                        <p className="text-xs text-orange-600 mt-1">Coming soon</p>
+                      )}
                     </div>
-                    <div className="text-gray-400">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
+                    {item.available && (
+                      <div className="text-gray-400">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

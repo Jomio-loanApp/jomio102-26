@@ -104,8 +104,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
   }
 
   return (
-    <Card className="group hover:shadow-md transition-shadow duration-200 border border-gray-200 h-full bg-white rounded-lg overflow-hidden">
-      <CardContent className="p-2 h-full flex flex-col">
+    <Card className="group hover:shadow-lg transition-shadow duration-200 border border-gray-200 h-full">
+      <CardContent className={`p-3 h-full flex flex-col ${compact ? 'w-40' : ''}`}>
         {/* Product Image */}
         <div 
           className="relative aspect-square bg-gray-100 rounded-lg mb-2 overflow-hidden cursor-pointer flex-shrink-0"
@@ -127,7 +127,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
           <Button
             size="sm"
             variant="ghost"
-            className="absolute top-1 right-1 p-1 bg-white bg-opacity-90 hover:bg-opacity-100 h-auto w-auto rounded-full"
+            className="absolute top-1 right-1 p-1.5 bg-white bg-opacity-90 hover:bg-opacity-100 h-auto"
             onClick={(e) => {
               e.stopPropagation()
               handleWishlistToggle()
@@ -140,7 +140,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
 
           {/* Availability Badge */}
           <div className="absolute top-1 left-1">
-            <Badge className={`text-xs px-1 py-0.5 ${getAvailabilityColor()}`}>
+            <Badge className={`text-xs px-1.5 py-0.5 ${getAvailabilityColor()}`}>
               {product.availability_status === 'In Stock' ? '●' : product.availability_status === 'Low Stock' ? '◐' : '○'}
             </Badge>
           </div>
@@ -149,14 +149,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
         {/* Product Info */}
         <div className="space-y-1 flex-grow flex flex-col">
           <h3 
-            className="font-medium text-gray-900 text-xs leading-tight line-clamp-2 cursor-pointer hover:text-green-600 transition-colors flex-grow min-h-[2.5rem]"
+            className="font-medium text-gray-900 text-xs leading-tight line-clamp-2 cursor-pointer hover:text-green-600 transition-colors flex-grow"
             onClick={() => onQuickView(product)}
           >
             {product.name}
           </h3>
 
           {/* Price */}
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between">
             <div>
               <span className="text-sm font-bold text-green-600">
                 {product.price_string}
@@ -171,7 +171,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
           <Button
             onClick={handleAddToCart}
             disabled={product.availability_status === 'Out of Stock'}
-            className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-1.5 h-auto mt-auto rounded-md"
+            className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-1.5 h-auto mt-auto"
             size="sm"
           >
             <Plus className="w-3 h-3 mr-1" />

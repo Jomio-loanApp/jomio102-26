@@ -116,14 +116,14 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
         <div className="flex justify-between items-center">
           <Skeleton className="h-4 w-48" />
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {[...Array(9)].map((_, index) => (
-            <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, index) => (
+            <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
               <Skeleton className="aspect-square w-full" />
-              <div className="p-2 space-y-2">
-                <Skeleton className="h-3 w-full" />
+              <div className="p-4 space-y-3">
+                <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-3 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-6 w-1/2" />
               </div>
             </div>
           ))}
@@ -180,7 +180,7 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {products.map((product) => (
             <ProductCard 
               key={product.product_id} 

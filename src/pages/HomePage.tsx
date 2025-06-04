@@ -28,7 +28,8 @@ const HomePage = () => {
     fetchHeaderBackground,
     fetchBannerStrips,
     fetchHomeContentSections,
-    isHeaderSticky
+    isHeaderSticky,
+    headerBackground
   } = useHomeStore()
 
   useEffect(() => {
@@ -64,21 +65,48 @@ const HomePage = () => {
     }
   }
 
+  const getHeaderStyle = () => {
+    if (!headerBackground) return {}
+    
+    if (headerBackground.background_image_url) {
+      return {
+        backgroundImage: `url(${headerBackground.background_image_url})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }
+    }
+    
+    if (headerBackground.background_color_hex) {
+      return {
+        backgroundColor: headerBackground.background_color_hex
+      }
+    }
+    
+    return {}
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Dynamic Header */}
-      <DynamicHeader
-        onSearch={handleSearch}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-      />
+      {/* Extended Dynamic Header Background Area */}
+      <div 
+        className="relative"
+        style={getHeaderStyle()}
+      >
+        {/* Dynamic Header */}
+        <DynamicHeader
+          onSearch={handleSearch}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+        />
 
-      {/* Category Scroller */}
-      <div className={isHeaderSticky ? 'mt-32' : ''}>
-        <CategoryScroller />
+        {/* Category Scroller - Inside the background area */}
+        <div className={isHeaderSticky ? 'mb-32' : ''}>
+          <CategoryScroller />
+        </div>
       </div>
 
-      {/* Banner Strip */}
+      {/* Banner Strip - Full width, outside background area */}
       <BannerStrip />
 
       {/* Main Content */}

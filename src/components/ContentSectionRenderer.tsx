@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useHomeStore } from '@/stores/homeStore'
 import ProductCard from '@/components/ProductCard'
@@ -141,13 +140,12 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
           <h2 className="text-xl font-bold text-gray-900 mb-4 px-4">{section.title_text}</h2>
         )}
         <div className="px-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             {products.map((product) => (
               <ProductCard
                 key={product.product_id}
                 product={product}
                 onQuickView={onQuickView}
-                compact={true}
               />
             ))}
           </div>
@@ -186,9 +184,9 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
           )}
         </div>
         <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex gap-3 px-4 min-w-max">
+          <div className="flex gap-2 px-4 min-w-max">
             {products.map((product) => (
-              <div key={product.product_id} className="flex-shrink-0 w-32">
+              <div key={product.product_id} className="flex-shrink-0 w-28">
                 <ProductCard
                   product={product}
                   onQuickView={onQuickView}

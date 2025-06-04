@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useHomeStore } from '@/stores/homeStore'
 import ProductCard from '@/components/ProductCard'
+import ProductListing from '@/components/ProductListing'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { ChevronRight } from 'lucide-react'
@@ -24,7 +25,7 @@ interface ContentSectionRendererProps {
 }
 
 const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) => {
-  const { homeContentSections, sectionItems } = useHomeStore()
+  const { homeContentSections, sectionItems, selectedCategory } = useHomeStore()
   const [sectionProducts, setSectionProducts] = useState<{ [sectionId: string]: Product[] }>({})
   const [isLoading, setIsLoading] = useState(false)
 
@@ -40,9 +41,8 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
       const items = sectionItems[section.id] || []
       
       if (section.section_type === 'random_category_grid_3xN' && section.context_category_id) {
-        // Fetch random products for this category
-        const rowCount = section.grid_rows_for_random || 2
-        const productCount = 3 * rowCount
+        // Always show 3x3 (9 products) for random category grids
+        const productCount = 9
 
         try {
           const { data, error } = await supabase
@@ -147,6 +147,7 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
                 key={product.product_id}
                 product={product}
                 onQuickView={onQuickView}
+                compact={true}
               />
             ))}
           </div>
@@ -187,10 +188,11 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-3 px-4 min-w-max">
             {products.map((product) => (
-              <div key={product.product_id} className="flex-shrink-0 w-40">
+              <div key={product.product_id} className="flex-shrink-0 w-32">
                 <ProductCard
                   product={product}
                   onQuickView={onQuickView}
+                  compact={true}
                 />
               </div>
             ))}
@@ -231,6 +233,16 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
             return null
         }
       })}
+      
+      {/* Show category products when a specific category is selected */}
+      {selectedCategory && (
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 px-4">All Products</h2>
+          <div className="px-4">
+            <ProductListing categoryId={selectedCategory} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

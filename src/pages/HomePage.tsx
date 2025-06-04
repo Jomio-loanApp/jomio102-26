@@ -52,6 +52,18 @@ const HomePage = () => {
     setSelectedProduct(null)
   }
 
+  // Transform product for ProductQuickView component
+  const transformProductForQuickView = (product: Product) => {
+    return {
+      id: product.product_id,
+      name: product.name,
+      description: product.description || null,
+      price_string: product.price_string,
+      unit_type: product.unit_type,
+      image_url: product.image_url || null
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Dynamic Header */}
@@ -88,7 +100,7 @@ const HomePage = () => {
       {/* Product Quick View Modal */}
       {selectedProduct && (
         <ProductQuickView
-          product={selectedProduct}
+          product={transformProductForQuickView(selectedProduct)}
           isOpen={!!selectedProduct}
           onClose={handleCloseQuickView}
         />

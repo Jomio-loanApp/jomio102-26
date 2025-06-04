@@ -32,9 +32,10 @@ interface ProductCardProps {
   product: Product
   tags?: Tag[]
   onQuickView: (product: Product) => void
+  compact?: boolean // For horizontal scrollers
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickView }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickView, compact = false }) => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { addItem: addToCart } = useCartStore()
@@ -73,7 +74,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
   }
 
   const handleAddToCart = () => {
-    // Add item directly to cart
     const cartItem = {
       product_id: product.product_id,
       name: product.name,
@@ -104,11 +104,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
   }
 
   return (
-    <Card className="group hover:shadow-lg transition-shadow duration-200 border border-gray-200">
-      <CardContent className="p-4">
+    <Card className="group hover:shadow-lg transition-shadow duration-200 border border-gray-200 h-full">
+      <CardContent className={`p-3 h-full flex flex-col ${compact ? 'w-40' : ''}`}>
         {/* Product Image */}
         <div 
-          className="relative aspect-square bg-gray-100 rounded-lg mb-3 overflow-hidden cursor-pointer"
+          className="relative aspect-square bg-gray-100 rounded-lg mb-2 overflow-hidden cursor-pointer flex-shrink-0"
           onClick={() => onQuickView(product)}
         >
           {product.image_url ? (
@@ -119,78 +119,46 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <span className="text-4xl">📦</span>
+              <span className="text-2xl">📦</span>
             </div>
           )}
           
-          {/* Quick View Overlay */}
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-              onClick={(e) => {
-                e.stopPropagation()
-                onQuickView(product)
-              }}
-            >
-              <Eye className="w-4 h-4 mr-1" />
-              Quick View
-            </Button>
-          </div>
-
           {/* Wishlist Button */}
           <Button
             size="sm"
             variant="ghost"
-            className="absolute top-2 right-2 p-2 bg-white bg-opacity-90 hover:bg-opacity-100"
+            className="absolute top-1 right-1 p-1.5 bg-white bg-opacity-90 hover:bg-opacity-100 h-auto"
             onClick={(e) => {
               e.stopPropagation()
               handleWishlistToggle()
             }}
           >
             <Heart 
-              className={`w-4 h-4 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} 
+              className={`w-3 h-3 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} 
             />
           </Button>
 
           {/* Availability Badge */}
-          <div className="absolute top-2 left-2">
-            <Badge className={`text-xs ${getAvailabilityColor()}`}>
-              {product.availability_status}
+          <div className="absolute top-1 left-1">
+            <Badge className={`text-xs px-1.5 py-0.5 ${getAvailabilityColor()}`}>
+              {product.availability_status === 'In Stock' ? '●' : product.availability_status === 'Low Stock' ? '◐' : '○'}
             </Badge>
           </div>
         </div>
 
         {/* Product Info */}
-        <div className="space-y-2">
+        <div className="space-y-1 flex-grow flex flex-col">
           <h3 
-            className="font-semibold text-gray-900 text-sm line-clamp-2 cursor-pointer hover:text-green-600 transition-colors"
+            className="font-medium text-gray-900 text-xs leading-tight line-clamp-2 cursor-pointer hover:text-green-600 transition-colors flex-grow"
             onClick={() => onQuickView(product)}
           >
             {product.name}
           </h3>
 
-          {/* Tags */}
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {tags.slice(0, 2).map((tag) => (
-                <Badge key={tag.tag_id} variant="outline" className="text-xs px-2 py-0">
-                  {tag.name}
-                </Badge>
-              ))}
-              {tags.length > 2 && (
-                <Badge variant="outline" className="text-xs px-2 py-0">
-                  +{tags.length - 2}
-                </Badge>
-              )}
-            </div>
-          )}
-
           {/* Price */}
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-lg font-bold text-green-600">
+              <span className="text-sm font-bold text-green-600">
                 {product.price_string}
               </span>
               <span className="text-xs text-gray-500 ml-1">
@@ -203,11 +171,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
           <Button
             onClick={handleAddToCart}
             disabled={product.availability_status === 'Out of Stock'}
-            className="w-full bg-green-600 hover:bg-green-700 text-white"
+            className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-1.5 h-auto mt-auto"
             size="sm"
           >
-            <Plus className="w-4 h-4 mr-1" />
-            Add to Cart
+            <Plus className="w-3 h-3 mr-1" />
+            ADD
           </Button>
         </div>
       </CardContent>

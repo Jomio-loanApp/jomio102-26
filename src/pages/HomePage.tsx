@@ -1,90 +1,98 @@
 
-import { useState } from 'react'
-import Header from '@/components/Header'
-import OfferSlider from '@/components/OfferSlider'
-import CategoryNavigation from '@/components/CategoryNavigation'
-import ProductListing from '@/components/ProductListing'
+import { useState, useEffect } from 'react'
+import { useHomeStore } from '@/stores/homeStore'
+import DynamicHeader from '@/components/DynamicHeader'
+import CategoryScroller from '@/components/CategoryScroller'
+import BannerStrip from '@/components/BannerStrip'
+import ContentSectionRenderer from '@/components/ContentSectionRenderer'
+import ProductQuickView from '@/components/ProductQuickView'
+
+interface Product {
+  product_id: string
+  name: string
+  description?: string
+  price_string: string
+  numeric_price: number
+  unit_type: string
+  image_url?: string
+  category_id?: string
+  is_active: boolean
+  availability_status: string
+}
 
 const HomePage = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const { 
+    selectedCategory,
+    fetchHeaderBackground,
+    fetchBannerStrips,
+    fetchHomeContentSections,
+    isHeaderSticky
+  } = useHomeStore()
+
+  useEffect(() => {
+    // Initialize with default home content
+    fetchHeaderBackground()
+    fetchBannerStrips()
+    fetchHomeContentSections()
+  }, [fetchHeaderBackground, fetchBannerStrips, fetchHomeContentSections])
 
   const handleSearch = (query: string) => {
-    console.log('HomePage: Search query:', query)
+    console.log('Search query:', query)
     setSearchQuery(query)
-    setSelectedCategory(null) // Clear category filter when searching
+    // TODO: Implement search results with interspersed content
   }
 
-  const handleCategorySelect = (categoryId: string | null) => {
-    console.log('HomePage: Category selected:', categoryId)
-    setSelectedCategory(categoryId)
-    setSearchQuery('') // Clear search when selecting category
+  const handleQuickView = (product: Product) => {
+    setSelectedProduct(product)
+  }
+
+  const handleCloseQuickView = () => {
+    setSelectedProduct(null)
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <Header onSearch={handleSearch} />
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
-        <div className="space-y-8">
-          {/* Offer Slider */}
-          <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-100">
-            <OfferSlider />
-          </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Dynamic Header */}
+      <DynamicHeader
+        onSearch={handleSearch}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+      />
 
-          {/* Category Navigation */}
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                <span className="w-1 h-6 bg-gradient-to-b from-green-500 to-green-600 rounded-full mr-3"></span>
-                Shop by Category
-              </h2>
-              {selectedCategory && (
-                <button
-                  onClick={() => handleCategorySelect(null)}
-                  className="text-sm text-green-600 hover:text-green-700 font-medium transition-colors"
-                >
-                  View All
-                </button>
-              )}
-            </div>
-            <CategoryNavigation 
-              onCategorySelect={handleCategorySelect}
-              selectedCategory={selectedCategory}
-            />
-          </div>
+      {/* Category Scroller */}
+      <div className={isHeaderSticky ? 'mt-32' : ''}>
+        <CategoryScroller />
+      </div>
 
-          {/* Products Section */}
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                <span className="w-1 h-6 bg-gradient-to-b from-green-500 to-green-600 rounded-full mr-3"></span>
-                {searchQuery 
-                  ? `Search Results for "${searchQuery}"`
-                  : selectedCategory 
-                    ? 'Category Products'
-                    : 'Featured Products'
-                }
-              </h2>
-              {(searchQuery || selectedCategory) && (
-                <button
-                  onClick={() => {
-                    setSearchQuery('')
-                    setSelectedCategory(null)
-                  }}
-                  className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors px-3 py-1 rounded-full bg-gray-100 hover:bg-gray-200"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-            <ProductListing 
-              categoryId={selectedCategory}
-              searchQuery={searchQuery}
-            />
+      {/* Banner Strip */}
+      <BannerStrip />
+
+      {/* Main Content */}
+      <main className="relative">
+        {searchQuery ? (
+          // Search Results View
+          <div className="px-4 py-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Search Results for "{searchQuery}"
+            </h2>
+            <p className="text-gray-600">Search functionality will be implemented here with interspersed content.</p>
           </div>
-        </div>
+        ) : (
+          // Dynamic Content Sections
+          <ContentSectionRenderer onQuickView={handleQuickView} />
+        )}
       </main>
+
+      {/* Product Quick View Modal */}
+      {selectedProduct && (
+        <ProductQuickView
+          product={selectedProduct}
+          isOpen={!!selectedProduct}
+          onClose={handleCloseQuickView}
+        />
+      )}
     </div>
   )
 }

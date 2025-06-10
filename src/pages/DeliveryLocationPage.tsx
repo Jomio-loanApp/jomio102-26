@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useLocationStore } from '@/stores/locationStore'
 import { supabase } from '@/lib/supabase'
-import { GoogleMap, LoadScript } from '@react-google-maps/api'
+import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -24,11 +24,11 @@ const defaultCenter = {
 }
 
 const mapOptions = {
-  zoomControl: false,
+  zoomControl: true,
   streetViewControl: false,
   mapTypeControl: false,
   fullscreenControl: false,
-  disableDefaultUI: true,
+  disableDefaultUI: false,
   gestureHandling: 'greedy',
   styles: [
     {
@@ -68,9 +68,8 @@ const DeliveryLocationPage = () => {
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false)
   
   const mapRef = useRef<google.maps.Map | null>(null)
-  const autocompleteElementRef = useRef<google.maps.places.PlaceAutocompleteElement | null>(null)
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const centerChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -133,21 +132,37 @@ const DeliveryLocationPage = () => {
     mapRef.current = map
     setIsLoadingMap(false)
     
-    if (searchInputRef.current && window.google?.maps?.places?.PlaceAutocompleteElement) {
+    // Initialize autocomplete if available
+    if (searchInputRef.current && window.google?.maps?.places?.Autocomplete) {
       try {
-        autocompleteElementRef.current = new google.maps.places.PlaceAutocompleteElement({
+        autocompleteRef.current = new google.maps.places.Autocomplete(searchInputRef.current, {
           componentRestrictions: { country: 'IN' },
           types: ['establishment', 'geocode']
         })
         
-        autocompleteElementRef.current.addEventListener('gmp-placeselect', onPlaceChanged)
-        
-        if (searchInputRef.current.parentNode) {
-          searchInputRef.current.parentNode.insertBefore(autocompleteElementRef.current, searchInputRef.current.nextSibling)
-          searchInputRef.current.style.display = 'none'
-        }
+        autocompleteRef.current.addListener('place_changed', () => {
+          const place = autocompleteRef.current?.getPlace()
+          if (place?.geometry?.location) {
+            const lat = place.geometry.location.lat()
+            const lng = place.geometry.location.lng()
+            const newPosition = { lat, lng }
+            setPosition(newPosition)
+            setLocationName(place.formatted_address || place.name || '')
+            setSearchQuery(place.formatted_address || place.name || '')
+            
+            if (mapRef.current) {
+              mapRef.current.panTo(newPosition)
+              mapRef.current.setZoom(16)
+            }
+            
+            toast({
+              title: "Location found",
+              description: `Using: ${place.formatted_address || place.name}`,
+            })
+          }
+        })
       } catch (error) {
-        console.error('Error initializing PlaceAutocompleteElement:', error)
+        console.error('Error initializing autocomplete:', error)
       }
     }
   }, [])
@@ -253,52 +268,15 @@ const DeliveryLocationPage = () => {
     }
   }
 
-  const handleMapCenterChanged = useCallback(() => {
-    if (!mapRef.current || isUpdatingLocation || showAddressSelection) return
-    
-    if (centerChangeTimeoutRef.current) {
-      clearTimeout(centerChangeTimeoutRef.current)
-    }
-    
-    centerChangeTimeoutRef.current = setTimeout(() => {
-      const center = mapRef.current?.getCenter()
-      if (center) {
-        const lat = center.lat()
-        const lng = center.lng()
-        const newPosition = { lat, lng }
-        
-        const latDiff = Math.abs(lat - position.lat)
-        const lngDiff = Math.abs(lng - position.lng)
-        
-        if (latDiff > 0.0001 || lngDiff > 0.0001) {
-          setPosition(newPosition)
-          updateLocationName(lat, lng)
-        }
-      }
-    }, 1000)
-  }, [position.lat, position.lng, isUpdatingLocation, showAddressSelection])
-
-  const onPlaceChanged = (event: any) => {
-    const place = event.detail.place
-    if (place.geometry && place.geometry.location) {
-      const lat = place.geometry.location.lat()
-      const lng = place.geometry.location.lng()
+  const handleMapClick = useCallback((event: google.maps.MapMouseEvent) => {
+    if (event.latLng) {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
       const newPosition = { lat, lng }
       setPosition(newPosition)
-      setLocationName(place.formatted_address || place.name || '')
-      setSearchQuery(place.formatted_address || place.name || '')
-      
-      if (mapRef.current) {
-        mapRef.current.panTo(newPosition)
-        mapRef.current.setZoom(16)
-      }
-      
-      toast({
-        title: "Location found",
-        description: `Using: ${place.formatted_address || place.name}`,
-      })
+      updateLocationName(lat, lng)
     }
-  }
+  }, [])
 
   const handleSelectSavedAddress = (address: SavedAddress) => {
     const newPosition = { lat: address.latitude, lng: address.longitude }
@@ -496,27 +474,22 @@ const DeliveryLocationPage = () => {
                 center={position}
                 zoom={15}
                 onLoad={handleMapLoad}
-                onCenterChanged={handleMapCenterChanged}
+                onClick={handleMapClick}
                 options={mapOptions}
               >
-                {/* Fixed center pin overlay */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-                  <div className="relative">
-                    <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-                      <div className="w-3 h-3 bg-white rounded-full"></div>
-                    </div>
-                    <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-6 border-transparent border-t-red-500"></div>
-                    
-                    {!locationName && (
-                      <div className="absolute -top-20 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-3 py-2 rounded-lg text-xs whitespace-nowrap">
-                        Your order will be delivered here
-                        <br />
-                        Move pin to your exact location
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-black border-t-opacity-80"></div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <Marker 
+                  position={position}
+                  draggable={true}
+                  onDragEnd={(e) => {
+                    if (e.latLng) {
+                      const lat = e.latLng.lat()
+                      const lng = e.latLng.lng()
+                      const newPosition = { lat, lng }
+                      setPosition(newPosition)
+                      updateLocationName(lat, lng)
+                    }
+                  }}
+                />
               </GoogleMap>
             </LoadScript>
 
@@ -578,7 +551,7 @@ const DeliveryLocationPage = () => {
               ) : (
                 <div className="flex items-center space-x-3 text-gray-500">
                   <MapPin className="w-5 h-5 flex-shrink-0" />
-                  <span className="text-sm">Move the map to select your location</span>
+                  <span className="text-sm">Click on the map to select your location</span>
                 </div>
               )}
 

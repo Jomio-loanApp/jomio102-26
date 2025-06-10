@@ -34,6 +34,7 @@ const HomePage = () => {
 
   useEffect(() => {
     // Initialize with default home content
+    console.log('HomePage: Initializing content...')
     fetchHeaderBackground()
     fetchBannerStrips()
     fetchHomeContentSections()
@@ -58,7 +59,7 @@ const HomePage = () => {
     return {
       id: product.product_id,
       name: product.name,
-      description: product.description || null,
+      description: null,
       price_string: product.price_string,
       unit_type: product.unit_type,
       image_url: product.image_url || null
@@ -101,7 +102,7 @@ const HomePage = () => {
         />
 
         {/* Category Scroller - Inside the background area */}
-        <div className={isHeaderSticky ? 'mb-32' : ''}>
+        <div className={isHeaderSticky ? 'mb-28 md:mb-32' : ''}>
           <CategoryScroller />
         </div>
       </div>
@@ -114,10 +115,10 @@ const HomePage = () => {
         {searchQuery ? (
           // Search Results View
           <div className="px-4 py-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
+            <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4">
               Search Results for "{searchQuery}"
             </h2>
-            <p className="text-gray-600">Search functionality will be implemented here with interspersed content.</p>
+            <p className="text-gray-600 text-sm md:text-base">Search functionality will be implemented here with interspersed content.</p>
           </div>
         ) : (
           // Dynamic Content Sections

@@ -12,6 +12,7 @@ import HomePage from '@/pages/HomePage'
 import CartPage from '@/pages/CartPage'
 import WishlistPage from '@/pages/WishlistPage'
 import DeliveryLocationPage from '@/pages/DeliveryLocationPage'
+import CheckoutDetailsPage from '@/pages/CheckoutDetailsPage'
 import CheckoutPage from '@/pages/CheckoutPage'
 import OrderConfirmationPage from '@/pages/OrderConfirmationPage'
 import ProfilePage from '@/pages/ProfilePage'
@@ -30,17 +31,10 @@ const ConditionalBottomNavigation = () => {
     '/select-delivery-location', 
     '/set-delivery-location',
     '/profile/addresses',
-    '/profile/edit',
-    '/checkout',
-    '/order-confirmation'
+    '/profile/edit'
   ]
   
-  // Check if current path starts with any of the hidden paths
-  const shouldHide = hideBottomNavPages.some(path => 
-    location.pathname.startsWith(path)
-  )
-  
-  if (shouldHide) {
+  if (hideBottomNavPages.includes(location.pathname)) {
     return null
   }
   

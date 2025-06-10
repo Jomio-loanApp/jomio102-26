@@ -17,24 +17,24 @@ const CategoryScroller = () => {
 
   return (
     <div className={`
-      ${isHeaderSticky ? 'fixed top-20 md:top-24 left-0 right-0 z-40 bg-white shadow-md' : 'relative'}
+      ${isHeaderSticky ? 'fixed top-20 left-0 right-0 z-40 bg-white shadow-md' : 'relative'}
       transition-all duration-300 ease-in-out
     `}>
       <div className="px-4 py-3">
-        <div className="flex overflow-x-auto scrollbar-hide gap-3 md:gap-4">
+        <div className="flex overflow-x-auto scrollbar-hide gap-4">
           {/* All Category */}
           <button
             onClick={() => setSelectedCategory(null)}
-            className="flex-shrink-0 flex flex-col items-center min-w-[60px] md:min-w-[70px] transition-all duration-200"
+            className="flex-shrink-0 flex flex-col items-center min-w-[60px] transition-all duration-200"
           >
-            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center mb-1 transition-all duration-200 ${
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-200 ${
               selectedCategory === null 
                 ? 'bg-green-100 ring-2 ring-green-500' 
                 : 'bg-gray-100 hover:bg-gray-200'
             }`}>
-              <span className="text-lg md:text-xl">🏪</span>
+              <span className="text-lg">🏪</span>
             </div>
-            <span className={`text-xs md:text-sm font-medium text-center leading-tight ${
+            <span className={`text-xs font-medium text-center leading-tight ${
               selectedCategory === null ? 'text-green-600' : 'text-gray-700'
             }`}>
               All
@@ -49,9 +49,9 @@ const CategoryScroller = () => {
             <button
               key={category.category_id}
               onClick={() => setSelectedCategory(category.category_id)}
-              className="flex-shrink-0 flex flex-col items-center min-w-[60px] md:min-w-[70px] transition-all duration-200"
+              className="flex-shrink-0 flex flex-col items-center min-w-[60px] transition-all duration-200"
             >
-              <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center mb-1 overflow-hidden transition-all duration-200 ${
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 overflow-hidden transition-all duration-200 ${
                 selectedCategory === category.category_id 
                   ? 'bg-green-100 ring-2 ring-green-500' 
                   : 'bg-gray-100 hover:bg-gray-200'
@@ -63,10 +63,10 @@ const CategoryScroller = () => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-lg md:text-xl">📦</span>
+                  <span className="text-lg">📦</span>
                 )}
               </div>
-              <span className={`text-xs md:text-sm font-medium text-center leading-tight ${
+              <span className={`text-xs font-medium text-center leading-tight ${
                 selectedCategory === category.category_id ? 'text-green-600' : 'text-gray-700'
               }`}>
                 {category.name}

@@ -13,6 +13,7 @@ import { toast } from '@/hooks/use-toast'
 interface Product {
   product_id: string
   name: string
+  description?: string
   price_string: string
   numeric_price: number
   unit_type: string
@@ -98,7 +99,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, compact
 
   return (
     <Card className="group hover:shadow-md transition-shadow duration-200 border border-gray-200 h-full">
-      <CardContent className="p-2 md:p-3 h-full flex flex-col">
+      <CardContent className="p-3 h-full flex flex-col">
         {/* Product Image */}
         <div 
           className="relative aspect-square bg-gray-100 rounded-lg mb-2 overflow-hidden cursor-pointer flex-shrink-0"
@@ -112,7 +113,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, compact
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <span className="text-xl md:text-2xl">📦</span>
+              <span className="text-2xl">📦</span>
             </div>
           )}
           
@@ -120,20 +121,20 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, compact
           <Button
             size="sm"
             variant="ghost"
-            className="absolute top-1 right-1 p-1 md:p-1.5 bg-white bg-opacity-90 hover:bg-opacity-100 h-auto"
+            className="absolute top-1 right-1 p-1.5 bg-white bg-opacity-90 hover:bg-opacity-100 h-auto"
             onClick={(e) => {
               e.stopPropagation()
               handleWishlistToggle()
             }}
           >
             <Heart 
-              className={`w-3 h-3 md:w-4 md:h-4 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} 
+              className={`w-3 h-3 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} 
             />
           </Button>
 
           {/* Availability Badge */}
           <div className="absolute top-1 left-1">
-            <Badge className={`text-xs px-1 py-0.5 ${getAvailabilityColor()}`}>
+            <Badge className={`text-xs px-1.5 py-0.5 ${getAvailabilityColor()}`}>
               {product.availability_status === 'In Stock' ? '●' : product.availability_status === 'Low Stock' ? '◐' : '○'}
             </Badge>
           </div>
@@ -142,7 +143,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, compact
         {/* Product Info */}
         <div className="space-y-1 flex-grow flex flex-col">
           <h3 
-            className="font-medium text-gray-900 text-xs md:text-sm leading-tight line-clamp-2 cursor-pointer hover:text-green-600 transition-colors flex-grow"
+            className="font-medium text-gray-900 text-sm leading-tight line-clamp-2 cursor-pointer hover:text-green-600 transition-colors flex-grow"
             onClick={() => onQuickView(product)}
           >
             {product.name}
@@ -151,7 +152,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, compact
           {/* Price */}
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs md:text-sm font-bold text-green-600">
+              <span className="text-sm font-bold text-green-600">
                 {product.price_string}
               </span>
               <span className="text-xs text-gray-500 ml-1">
@@ -164,7 +165,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, compact
           <Button
             onClick={handleAddToCart}
             disabled={product.availability_status === 'Out of Stock'}
-            className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-1 md:py-1.5 h-auto mt-auto"
+            className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-1.5 h-auto mt-auto"
             size="sm"
           >
             <Plus className="w-3 h-3 mr-1" />

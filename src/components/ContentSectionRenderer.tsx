@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 interface Product {
   product_id: string
   name: string
+  description?: string
   price_string: string
   numeric_price: number
   unit_type: string
@@ -38,17 +39,17 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
     if (!adItems.length) return null
 
     return (
-      <div className="mb-6 md:mb-8">
+      <div className="mb-8">
         {section.title_text && (
-          <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4 px-4">{section.title_text}</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4 px-4">{section.title_text}</h2>
         )}
         <div className="px-4">
           <div className="overflow-x-auto scrollbar-hide">
-            <div className="flex gap-3 md:gap-4 min-w-max">
+            <div className="flex gap-4 min-w-max">
               {adItems.map((item: any) => (
                 <div
                   key={item.id}
-                  className="flex-shrink-0 w-72 md:w-80 h-40 md:h-48 rounded-xl overflow-hidden cursor-pointer hover:scale-105 transition-transform duration-200"
+                  className="flex-shrink-0 w-80 h-48 rounded-xl overflow-hidden cursor-pointer hover:scale-105 transition-transform duration-200"
                   onClick={() => {
                     if (item.advertisement_link_url) {
                       window.open(item.advertisement_link_url, '_blank')
@@ -76,15 +77,15 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
     if (!products.length) return null
 
     return (
-      <div className="mb-6 md:mb-8">
+      <div className="mb-8">
         <div className="flex items-center justify-between mb-4 px-4">
-          <h2 className="text-lg md:text-xl font-bold text-gray-900">{section.title_text}</h2>
+          <h2 className="text-xl font-bold text-gray-900">{section.title_text}</h2>
           {section.see_more_link_url && (
             <Link to={section.see_more_link_url}>
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-green-600 hover:text-green-700 text-sm md:text-base"
+                className="text-green-600 hover:text-green-700"
               >
                 See more <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
@@ -92,13 +93,12 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
           )}
         </div>
         <div className="px-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+          <div className="grid grid-cols-3 gap-3">
             {products.map((product: Product) => (
               <ProductCard
                 key={product.product_id}
                 product={product}
                 onQuickView={onQuickView}
-                compact
               />
             ))}
           </div>
@@ -114,15 +114,15 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
     if (!products.length) return null
 
     return (
-      <div className="mb-6 md:mb-8">
+      <div className="mb-8">
         <div className="flex items-center justify-between mb-4 px-4">
-          <h2 className="text-lg md:text-xl font-bold text-gray-900">{section.title_text}</h2>
+          <h2 className="text-xl font-bold text-gray-900">{section.title_text}</h2>
           {section.see_more_link_url && (
             <Link to={section.see_more_link_url}>
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-green-600 hover:text-green-700 text-sm md:text-base"
+                className="text-green-600 hover:text-green-700"
               >
                 See more <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
@@ -130,9 +130,9 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
           )}
         </div>
         <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex gap-3 md:gap-4 px-4 min-w-max">
+          <div className="flex gap-3 px-4 min-w-max">
             {products.map((product: Product) => (
-              <div key={product.product_id} className="flex-shrink-0 w-36 md:w-40">
+              <div key={product.product_id} className="flex-shrink-0 w-40">
                 <ProductCard
                   product={product}
                   onQuickView={onQuickView}
@@ -150,16 +150,15 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
     if (!selectedCategory || !categoryProducts.length) return null
 
     return (
-      <div className="mb-6 md:mb-8">
+      <div className="mb-8">
         <div className="px-4">
-          <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4">All Products</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">All Products</h2>
+          <div className="grid grid-cols-3 gap-3 mb-4">
             {categoryProducts.map((product: Product) => (
               <ProductCard
                 key={product.product_id}
                 product={product}
                 onQuickView={onQuickView}
-                compact
               />
             ))}
           </div>
@@ -186,14 +185,14 @@ const ContentSectionRenderer = ({ onQuickView }: ContentSectionRendererProps) =>
       <div className="px-4 py-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto"></div>
-          <p className="text-gray-600 mt-2 text-sm md:text-base">Loading content...</p>
+          <p className="text-gray-600 mt-2">Loading content...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="pb-20 md:pb-8">
+    <div className="pb-20">
       {/* Render dynamic content sections */}
       {homeContentSections.map((section) => {
         switch (section.section_type) {

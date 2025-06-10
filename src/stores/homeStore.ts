@@ -15,6 +15,7 @@ interface PageUIElement {
 interface Product {
   product_id: string
   name: string
+  description?: string
   price_string: string
   numeric_price: number
   unit_type: string
@@ -96,7 +97,6 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   showHeaderText: true,
 
   setSelectedCategory: (categoryId) => {
-    console.log('Setting selected category:', categoryId)
     set({ 
       selectedCategory: categoryId,
       categoryProducts: [],
@@ -117,18 +117,12 @@ export const useHomeStore = create<HomeState>((set, get) => ({
 
   fetchCategories: async () => {
     try {
-      console.log('Fetching categories...')
       const { data, error } = await supabase
         .from('categories')
         .select('category_id, name, image_url')
         .order('name')
 
-      if (error) {
-        console.error('Error fetching categories:', error)
-        throw error
-      }
-      
-      console.log('Categories fetched:', data)
+      if (error) throw error
       set({ categories: data || [] })
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -137,7 +131,6 @@ export const useHomeStore = create<HomeState>((set, get) => ({
 
   fetchHeaderBackground: async (categoryId = null) => {
     try {
-      console.log('Fetching header background for category:', categoryId)
       let query = supabase
         .from('page_ui_elements')
         .select('*')
@@ -153,12 +146,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
 
       const { data, error } = await query.single()
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching header background:', error)
-        throw error
-      }
-      
-      console.log('Header background fetched:', data)
+      if (error && error.code !== 'PGRST116') throw error
       set({ headerBackground: data })
     } catch (error) {
       console.error('Error fetching header background:', error)
@@ -167,7 +155,6 @@ export const useHomeStore = create<HomeState>((set, get) => ({
 
   fetchBannerStrips: async (categoryId = null) => {
     try {
-      console.log('Fetching banner strips for category:', categoryId)
       let query = supabase
         .from('page_ui_elements')
         .select('*')
@@ -183,12 +170,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
 
       const { data, error } = await query
 
-      if (error) {
-        console.error('Error fetching banner strips:', error)
-        throw error
-      }
-      
-      console.log('Banner strips fetched:', data)
+      if (error) throw error
       set({ bannerStrips: data || [] })
     } catch (error) {
       console.error('Error fetching banner strips:', error)
@@ -198,15 +180,13 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   fetchHomeContentSections: async (categoryId = null) => {
     try {
       set({ isLoading: true })
-      console.log('Fetching home content sections for category:', categoryId)
-      
       let query = supabase
         .from('home_content_sections')
         .select(`
           *,
           section_items (
             *,
-            products ( product_id, name, image_url, price_string, numeric_price, availability_status, is_active, unit_type, category_id )
+            products ( product_id, name, image_url, price_string, numeric_price, availability_status, is_active, unit_type, description, category_id )
           )
         `)
 
@@ -222,12 +202,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
         .order('display_order')
         .order('display_order_in_section', { foreignTable: 'section_items' })
 
-      if (error) {
-        console.error('Error fetching home content sections:', error)
-        throw error
-      }
-      
-      console.log('Home content sections fetched:', data)
+      if (error) throw error
       
       // Process sections with random category grids
       const processedSections = await Promise.all((data || []).map(async (section) => {
@@ -277,7 +252,6 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   fetchCategoryProducts: async (categoryId, page = 1) => {
     try {
       set({ isLoadingCategoryProducts: true })
-      console.log('Fetching category products for:', categoryId, 'page:', page)
       
       const from = (page - 1) * PRODUCTS_PER_PAGE
       const to = from + PRODUCTS_PER_PAGE - 1
@@ -291,12 +265,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
         .range(from, to)
         .order('name')
 
-      if (error) {
-        console.error('Error fetching category products:', error)
-        throw error
-      }
-      
-      console.log('Category products fetched:', data, 'count:', count)
+      if (error) throw error
       
       const products = data || []
       const hasMore = (count || 0) > to + 1

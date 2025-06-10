@@ -25,18 +25,23 @@ const CategoryScroller = () => {
           {/* All Category */}
           <button
             onClick={() => setSelectedCategory(null)}
-            className={`
-              flex-shrink-0 flex flex-col items-center min-w-[80px] p-3 rounded-xl transition-all duration-200
-              ${selectedCategory === null 
-                ? 'bg-green-100 border-2 border-green-500' 
-                : 'bg-gray-50 hover:bg-gray-100'
-              }
-            `}
+            className="flex-shrink-0 flex flex-col items-center min-w-[60px] transition-all duration-200"
           >
-            <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mb-2">
-              <span className="text-white font-bold text-lg">All</span>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-200 ${
+              selectedCategory === null 
+                ? 'bg-green-100 ring-2 ring-green-500' 
+                : 'bg-gray-100 hover:bg-gray-200'
+            }`}>
+              <span className="text-lg">🏪</span>
             </div>
-            <span className="text-xs font-medium text-gray-700 text-center">All</span>
+            <span className={`text-xs font-medium text-center leading-tight ${
+              selectedCategory === null ? 'text-green-600' : 'text-gray-700'
+            }`}>
+              All
+            </span>
+            {selectedCategory === null && (
+              <div className="w-6 h-0.5 bg-green-500 mt-1 rounded-full"></div>
+            )}
           </button>
 
           {/* Dynamic Categories */}
@@ -44,15 +49,13 @@ const CategoryScroller = () => {
             <button
               key={category.category_id}
               onClick={() => setSelectedCategory(category.category_id)}
-              className={`
-                flex-shrink-0 flex flex-col items-center min-w-[80px] p-3 rounded-xl transition-all duration-200
-                ${selectedCategory === category.category_id 
-                  ? 'bg-blue-100 border-2 border-blue-500' 
-                  : 'bg-gray-50 hover:bg-gray-100'
-                }
-              `}
+              className="flex-shrink-0 flex flex-col items-center min-w-[60px] transition-all duration-200"
             >
-              <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mb-2 overflow-hidden">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 overflow-hidden transition-all duration-200 ${
+                selectedCategory === category.category_id 
+                  ? 'bg-green-100 ring-2 ring-green-500' 
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}>
                 {category.image_url ? (
                   <img 
                     src={category.image_url} 
@@ -60,12 +63,17 @@ const CategoryScroller = () => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-gray-500 text-xs">📦</span>
+                  <span className="text-lg">📦</span>
                 )}
               </div>
-              <span className="text-xs font-medium text-gray-700 text-center leading-tight">
+              <span className={`text-xs font-medium text-center leading-tight ${
+                selectedCategory === category.category_id ? 'text-green-600' : 'text-gray-700'
+              }`}>
                 {category.name}
               </span>
+              {selectedCategory === category.category_id && (
+                <div className="w-6 h-0.5 bg-green-500 mt-1 rounded-full"></div>
+              )}
             </button>
           ))}
         </div>

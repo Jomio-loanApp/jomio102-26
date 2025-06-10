@@ -1,7 +1,7 @@
 
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, Plus, Eye } from 'lucide-react'
+import { Heart, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,19 +23,13 @@ interface Product {
   availability_status: string
 }
 
-interface Tag {
-  tag_id: string
-  name: string
-}
-
 interface ProductCardProps {
   product: Product
-  tags?: Tag[]
   onQuickView: (product: Product) => void
-  compact?: boolean // For horizontal scrollers
+  compact?: boolean
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickView, compact = false }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, compact = false }) => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { addItem: addToCart } = useCartStore()
@@ -104,8 +98,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
   }
 
   return (
-    <Card className="group hover:shadow-lg transition-shadow duration-200 border border-gray-200 h-full">
-      <CardContent className={`p-3 h-full flex flex-col ${compact ? 'w-40' : ''}`}>
+    <Card className="group hover:shadow-md transition-shadow duration-200 border border-gray-200 h-full">
+      <CardContent className="p-3 h-full flex flex-col">
         {/* Product Image */}
         <div 
           className="relative aspect-square bg-gray-100 rounded-lg mb-2 overflow-hidden cursor-pointer flex-shrink-0"
@@ -149,7 +143,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, tags = [], onQuickVi
         {/* Product Info */}
         <div className="space-y-1 flex-grow flex flex-col">
           <h3 
-            className="font-medium text-gray-900 text-xs leading-tight line-clamp-2 cursor-pointer hover:text-green-600 transition-colors flex-grow"
+            className="font-medium text-gray-900 text-sm leading-tight line-clamp-2 cursor-pointer hover:text-green-600 transition-colors flex-grow"
             onClick={() => onQuickView(product)}
           >
             {product.name}

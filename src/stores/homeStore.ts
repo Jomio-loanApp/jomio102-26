@@ -12,15 +12,17 @@ interface PageUIElement {
   banner_images_json?: any
 }
 
-interface HomeContentSection {
-  id: string
-  section_type: string
-  title_text?: string
-  display_context: string
-  context_category_id?: string
-  display_order: number
-  see_more_link_url?: string
-  grid_rows_for_random?: number
+interface Product {
+  product_id: string
+  name: string
+  description?: string
+  price_string: string
+  numeric_price: number
+  unit_type: string
+  image_url?: string
+  category_id?: string
+  is_active: boolean
+  availability_status: string
 }
 
 interface SectionItem {
@@ -30,7 +32,20 @@ interface SectionItem {
   product_id?: string
   advertisement_image_url?: string
   advertisement_link_url?: string
+  display_order_in_section: number
+  products?: Product
+}
+
+interface HomeContentSection {
+  id: string
+  section_type: string
+  title_text?: string
+  display_context: string
+  context_category_id?: string
   display_order: number
+  see_more_link_url?: string
+  grid_rows_for_random?: number
+  section_items?: SectionItem[]
 }
 
 interface Category {
@@ -44,9 +59,12 @@ interface HomeState {
   headerBackground: PageUIElement | null
   bannerStrips: PageUIElement[]
   homeContentSections: HomeContentSection[]
-  sectionItems: { [sectionId: string]: SectionItem[] }
   categories: Category[]
+  categoryProducts: Product[]
+  categoryProductsPage: number
+  categoryProductsHasMore: boolean
   isLoading: boolean
+  isLoadingCategoryProducts: boolean
   isHeaderSticky: boolean
   showHeaderText: boolean
   
@@ -58,26 +76,40 @@ interface HomeState {
   fetchHeaderBackground: (categoryId?: string | null) => Promise<void>
   fetchBannerStrips: (categoryId?: string | null) => Promise<void>
   fetchHomeContentSections: (categoryId?: string | null) => Promise<void>
-  fetchSectionItems: (sectionId: string) => Promise<void>
+  fetchCategoryProducts: (categoryId: string, page?: number) => Promise<void>
+  loadMoreCategoryProducts: () => Promise<void>
 }
+
+const PRODUCTS_PER_PAGE = 12
 
 export const useHomeStore = create<HomeState>((set, get) => ({
   selectedCategory: null,
   headerBackground: null,
   bannerStrips: [],
   homeContentSections: [],
-  sectionItems: {},
   categories: [],
+  categoryProducts: [],
+  categoryProductsPage: 1,
+  categoryProductsHasMore: true,
   isLoading: false,
+  isLoadingCategoryProducts: false,
   isHeaderSticky: false,
   showHeaderText: true,
 
   setSelectedCategory: (categoryId) => {
-    set({ selectedCategory: categoryId })
-    const { fetchHeaderBackground, fetchBannerStrips, fetchHomeContentSections } = get()
+    set({ 
+      selectedCategory: categoryId,
+      categoryProducts: [],
+      categoryProductsPage: 1,
+      categoryProductsHasMore: true
+    })
+    const { fetchHeaderBackground, fetchBannerStrips, fetchHomeContentSections, fetchCategoryProducts } = get()
     fetchHeaderBackground(categoryId)
     fetchBannerStrips(categoryId)
     fetchHomeContentSections(categoryId)
+    if (categoryId) {
+      fetchCategoryProducts(categoryId, 1)
+    }
   },
 
   setHeaderSticky: (sticky) => set({ isHeaderSticky: sticky }),
@@ -150,7 +182,13 @@ export const useHomeStore = create<HomeState>((set, get) => ({
       set({ isLoading: true })
       let query = supabase
         .from('home_content_sections')
-        .select('*')
+        .select(`
+          *,
+          section_items (
+            *,
+            products ( product_id, name, image_url, price_string, numeric_price, availability_status, is_active, unit_type, description, category_id )
+          )
+        `)
 
       if (categoryId) {
         query = query
@@ -160,17 +198,50 @@ export const useHomeStore = create<HomeState>((set, get) => ({
         query = query.in('display_context', ['home_all_initial_content', 'home_all_sequential_category_content'])
       }
 
-      const { data, error } = await query.order('display_order')
+      const { data, error } = await query
+        .order('display_order')
+        .order('display_order_in_section', { foreignTable: 'section_items' })
 
       if (error) throw error
       
-      const sections = data || []
-      set({ homeContentSections: sections })
+      // Process sections with random category grids
+      const processedSections = await Promise.all((data || []).map(async (section) => {
+        if (section.section_type === 'random_category_grid_3xN' && section.context_category_id) {
+          const rowCount = section.grid_rows_for_random || 3
+          const productCount = 3 * rowCount
 
-      // Fetch items for each section
-      for (const section of sections) {
-        get().fetchSectionItems(section.id)
-      }
+          try {
+            const { data: randomProducts, error: randomError } = await supabase
+              .from('products')
+              .select('*')
+              .eq('category_id', section.context_category_id)
+              .eq('is_active', true)
+              .neq('availability_status', 'Out of Stock')
+              .limit(productCount * 2)
+
+            if (randomError) throw randomError
+            
+            const shuffled = (randomProducts || []).sort(() => 0.5 - Math.random())
+            const selectedProducts = shuffled.slice(0, productCount)
+            
+            // Convert to section_items format
+            section.section_items = selectedProducts.map((product, index) => ({
+              id: `random_${section.id}_${index}`,
+              section_id: section.id,
+              item_type: 'product',
+              product_id: product.product_id,
+              display_order_in_section: index,
+              products: product
+            }))
+          } catch (error) {
+            console.error('Error fetching random products:', error)
+            section.section_items = []
+          }
+        }
+        return section
+      }))
+      
+      set({ homeContentSections: processedSections })
     } catch (error) {
       console.error('Error fetching home content sections:', error)
     } finally {
@@ -178,24 +249,51 @@ export const useHomeStore = create<HomeState>((set, get) => ({
     }
   },
 
-  fetchSectionItems: async (sectionId) => {
+  fetchCategoryProducts: async (categoryId, page = 1) => {
     try {
-      const { data, error } = await supabase
-        .from('section_items')
-        .select('*')
-        .eq('section_id', sectionId)
-        .order('display_order')
+      set({ isLoadingCategoryProducts: true })
+      
+      const from = (page - 1) * PRODUCTS_PER_PAGE
+      const to = from + PRODUCTS_PER_PAGE - 1
+
+      const { data, error, count } = await supabase
+        .from('products')
+        .select('*', { count: 'exact' })
+        .eq('category_id', categoryId)
+        .eq('is_active', true)
+        .neq('availability_status', 'Out of Stock')
+        .range(from, to)
+        .order('name')
 
       if (error) throw error
       
-      set(state => ({
-        sectionItems: {
-          ...state.sectionItems,
-          [sectionId]: data || []
-        }
-      }))
+      const products = data || []
+      const hasMore = (count || 0) > to + 1
+
+      if (page === 1) {
+        set({ 
+          categoryProducts: products,
+          categoryProductsPage: 1,
+          categoryProductsHasMore: hasMore
+        })
+      } else {
+        set(state => ({ 
+          categoryProducts: [...state.categoryProducts, ...products],
+          categoryProductsPage: page,
+          categoryProductsHasMore: hasMore
+        }))
+      }
     } catch (error) {
-      console.error('Error fetching section items:', error)
+      console.error('Error fetching category products:', error)
+    } finally {
+      set({ isLoadingCategoryProducts: false })
+    }
+  },
+
+  loadMoreCategoryProducts: async () => {
+    const { selectedCategory, categoryProductsPage, categoryProductsHasMore, fetchCategoryProducts } = get()
+    if (selectedCategory && categoryProductsHasMore) {
+      await fetchCategoryProducts(selectedCategory, categoryProductsPage + 1)
     }
   }
 }))

@@ -5,8 +5,7 @@ import { useHomeStore } from '@/stores/homeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 interface DynamicHeaderProps {
   onSearch: (query: string) => void
@@ -113,8 +112,8 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery }: DynamicHeaderP
           </form>
 
           {/* Cart Button */}
-          <button
-            onClick={() => navigate('/cart')}
+          <Link
+            to="/cart"
             className="relative p-3 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow"
           >
             <ShoppingCart className="w-6 h-6 text-gray-700" />
@@ -123,15 +122,15 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery }: DynamicHeaderP
                 {cartItemCount}
               </span>
             )}
-          </button>
+          </Link>
 
           {/* User Button */}
-          <button
-            onClick={() => navigate(user ? '/profile' : '/login')}
+          <Link
+            to={user ? '/profile' : '/login'}
             className="p-3 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow"
           >
             <User className="w-6 h-6 text-gray-700" />
-          </button>
+          </Link>
         </div>
       </div>
     </div>

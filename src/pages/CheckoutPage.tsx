@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -32,7 +33,7 @@ const CheckoutPage = () => {
   // Form states
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('')
+  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('') // No default selection
   const [customerNotes, setCustomerNotes] = useState('')
   
   // Data states
@@ -58,7 +59,13 @@ const CheckoutPage = () => {
 
     if (!deliveryLat || !deliveryLng) {
       console.log('CheckoutPage: No delivery location set, redirecting to location selection')
-      navigate('/set-delivery-location')
+      
+      // For logged-in users, redirect to address selection
+      if (user) {
+        navigate('/select-address')
+      } else {
+        navigate('/set-delivery-location')
+      }
       return
     }
     
@@ -66,9 +73,11 @@ const CheckoutPage = () => {
   }, [user, profile, items.length, deliveryLat, deliveryLng, navigate])
 
   useEffect(() => {
+    // Only calculate delivery charge when instant delivery is explicitly selected
     if (selectedDeliveryOption === 'instant' && deliveryLat && deliveryLng) {
       calculateDeliveryCharge()
     } else {
+      // Clear delivery charge for other options
       setDeliveryCharge(0)
     }
   }, [selectedDeliveryOption, deliveryLat, deliveryLng])
@@ -130,7 +139,6 @@ const CheckoutPage = () => {
       
       console.log('CheckoutPage: Delivery options response:', data)
       
-      // Robust array handling
       let optionsArray: DeliveryOption[] = []
       
       if (Array.isArray(data)) {
@@ -147,9 +155,7 @@ const CheckoutPage = () => {
       
       setDeliveryOptions(optionsArray)
       
-      if (optionsArray.length > 0) {
-        setSelectedDeliveryOption(optionsArray[0].type)
-      }
+      // Do not set default selection - user must choose explicitly
       
     } catch (error) {
       console.error('Error fetching delivery options:', error)
@@ -162,7 +168,6 @@ const CheckoutPage = () => {
       ]
       console.log('CheckoutPage: Using fallback delivery options:', fallbackOptions)
       setDeliveryOptions(fallbackOptions)
-      setSelectedDeliveryOption('instant')
     } finally {
       setIsLoadingOptions(false)
     }
@@ -463,7 +468,7 @@ const CheckoutPage = () => {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => navigate('/set-delivery-location')}
+                    onClick={() => navigate(user ? '/select-address' : '/set-delivery-location')}
                   >
                     Change
                   </Button>
@@ -485,6 +490,15 @@ const CheckoutPage = () => {
                   <Alert className="mb-4 border-yellow-200 bg-yellow-50">
                     <AlertCircle className="h-4 w-4 text-yellow-600" />
                     <AlertDescription className="text-yellow-700">{deliveryOptionsError}</AlertDescription>
+                  </Alert>
+                )}
+                
+                {!selectedDeliveryOption && (
+                  <Alert className="mb-4 border-blue-200 bg-blue-50">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-700">
+                      Please select a delivery option to continue
+                    </AlertDescription>
                   </Alert>
                 )}
                 
@@ -600,17 +614,6 @@ const CheckoutPage = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Minimum Order Warning */}
-                {subtotal < minimumOrderValue && (
-                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-sm text-yellow-800">
-                      <strong>Minimum order value is ₹{minimumOrderValue.toFixed(2)}.</strong>
-                      <br />
-                      Please add items worth ₹{(minimumOrderValue - subtotal).toFixed(2)} more.
-                    </p>
-                  </div>
-                )}
 
                 {/* Place Order Button */}
                 <Button

@@ -10,16 +10,25 @@ interface LocationSelectorProps {
   selectedPosition?: [number, number]
 }
 
+declare global {
+  interface Window {
+    google: any
+    initMap: () => void
+  }
+}
+
 const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition }: LocationSelectorProps) => {
   const [position, setPosition] = useState<[number, number]>(
-    selectedPosition || initialPosition || [12.9716, 77.5946]
+    selectedPosition || initialPosition || [25.9716, 85.5946] // Darbhanga coordinates
   )
   const [isLocating, setIsLocating] = useState(false)
   const [locationName, setLocationName] = useState('')
   const [manualAddress, setManualAddress] = useState('')
   const [isGettingLocationName, setIsGettingLocationName] = useState(false)
-  const mapRef = useRef<any>(null)
+  const [mapLoaded, setMapLoaded] = useState(false)
+  const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
+  const markerRef = useRef<any>(null)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -44,11 +53,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     } catch (error) {
       console.error('Error getting location name from Edge Function:', error)
       
-      // Fallback to direct geocoding if available
+      // Fallback to Google Geocoding if available
       if (window.google?.maps?.Geocoder) {
         return new Promise<string>((resolve) => {
-          const geocoder = new google.maps.Geocoder()
-          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          const geocoder = new window.google.maps.Geocoder()
+          geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
             if (status === 'OK' && results && results[0]) {
               resolve(results[0].formatted_address)
             } else {
@@ -89,12 +98,20 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
           const { latitude, longitude } = position.coords
           console.log('Got current location:', latitude, longitude)
           handleLocationChange(latitude, longitude)
+          
+          // Update map if loaded
+          if (mapInstanceRef.current && markerRef.current) {
+            const newPos = { lat: latitude, lng: longitude }
+            mapInstanceRef.current.setCenter(newPos)
+            markerRef.current.setPosition(newPos)
+          }
+          
           setIsLocating(false)
         },
         (error) => {
           console.error('Error getting current location:', error)
           setIsLocating(false)
-          alert('Unable to get your current location. Please enter your address manually.')
+          alert('Unable to get your current location. Please select on the map.')
         },
         {
           enableHighAccuracy: true,
@@ -116,62 +133,96 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     }
   }
 
-  // Initialize simple map when component mounts
-  useEffect(() => {
-    const initializeMap = async () => {
-      try {
-        const L = await import('leaflet')
-        await import('leaflet/dist/leaflet.css')
+  const initializeGoogleMap = () => {
+    if (!window.google || !mapRef.current || mapInstanceRef.current) return
 
-        delete (L.Icon.Default.prototype as any)._getIconUrl
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-          iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-        })
+    console.log('Initializing Google Map...')
 
-        if (mapRef.current && !mapInstanceRef.current) {
-          mapInstanceRef.current = L.map(mapRef.current).setView(position, 15)
-
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          }).addTo(mapInstanceRef.current)
-
-          const marker = L.marker(position).addTo(mapInstanceRef.current)
-
-          mapInstanceRef.current.on('click', (e: any) => {
-            const { lat, lng } = e.latlng
-            marker.setLatLng([lat, lng])
-            handleLocationChange(lat, lng)
-          })
-        }
-      } catch (error) {
-        console.error('Error initializing map:', error)
-      }
+    const mapOptions = {
+      center: { lat: position[0], lng: position[1] },
+      zoom: 15,
+      mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+      zoomControl: true,
+      mapTypeControl: false,
+      scaleControl: true,
+      streetViewControl: false,
+      rotateControl: false,
+      fullscreenControl: true
     }
 
-    initializeMap()
+    mapInstanceRef.current = new window.google.maps.Map(mapRef.current, mapOptions)
 
+    // Add marker
+    markerRef.current = new window.google.maps.Marker({
+      position: { lat: position[0], lng: position[1] },
+      map: mapInstanceRef.current,
+      draggable: true,
+      title: 'Delivery Location'
+    })
+
+    // Map click event
+    mapInstanceRef.current.addListener('click', (event: any) => {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
+      markerRef.current.setPosition({ lat, lng })
+      handleLocationChange(lat, lng)
+    })
+
+    // Marker drag event
+    markerRef.current.addListener('dragend', (event: any) => {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
+      handleLocationChange(lat, lng)
+    })
+
+    setMapLoaded(true)
+    console.log('Google Map initialized successfully')
+  }
+
+  const loadGoogleMaps = () => {
+    if (window.google) {
+      initializeGoogleMap()
+      return
+    }
+
+    // Create script tag to load Google Maps
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBgvl_eqV5JeJBP35Rg6fMT1lXHkBgN0vI&libraries=places&callback=initMap`
+    script.async = true
+    script.defer = true
+
+    window.initMap = () => {
+      console.log('Google Maps API loaded')
+      initializeGoogleMap()
+    }
+
+    document.head.appendChild(script)
+  }
+
+  useEffect(() => {
+    loadGoogleMaps()
+    
     return () => {
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove()
-        mapInstanceRef.current = null
+        // Cleanup would go here
       }
     }
   }, [])
 
   // Update map when position changes externally
   useEffect(() => {
-    if (mapInstanceRef.current && selectedPosition) {
+    if (mapInstanceRef.current && markerRef.current && selectedPosition) {
+      const newPos = { lat: selectedPosition[0], lng: selectedPosition[1] }
+      mapInstanceRef.current.setCenter(newPos)
+      markerRef.current.setPosition(newPos)
       setPosition(selectedPosition)
-      mapInstanceRef.current.setView(selectedPosition, 15)
       handleLocationChange(selectedPosition[0], selectedPosition[1])
     }
   }, [selectedPosition])
 
   return (
     <div className="space-y-4">
-      <div className="flex space-x-3">
+      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
         <Button
           onClick={getCurrentLocation}
           disabled={isLocating}
@@ -185,36 +236,39 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
           )}
           Use Current Location
         </Button>
-        <div className="flex-1 flex items-center text-sm text-gray-600">
+        <div className="flex-1 flex items-center justify-center text-sm text-gray-600">
           <MapPin className="w-4 h-4 mr-2" />
-          Or click on the map below
+          Click or drag marker on map
         </div>
       </div>
 
-      {/* Map container */}
-      <div 
-        ref={mapRef}
-        className="h-64 md:h-80 rounded-lg overflow-hidden border bg-gray-100 relative"
-        style={{ minHeight: '256px' }}
-      >
-        {/* Loading overlay */}
+      {/* Google Map container */}
+      <div className="relative">
+        <div 
+          ref={mapRef}
+          className="h-64 md:h-80 lg:h-96 w-full rounded-lg overflow-hidden border bg-gray-100"
+          style={{ minHeight: '320px' }}
+        >
+          {/* Loading overlay */}
+          {!mapLoaded && (
+            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-10">
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-gray-400" />
+                <p className="text-sm text-gray-600">Loading map...</p>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Location name loading overlay */}
         {isGettingLocationName && (
-          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center z-20 rounded-lg">
             <div className="bg-white p-3 rounded-lg flex items-center space-x-2">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span className="text-sm">Getting location...</span>
             </div>
           </div>
         )}
-        
-        {/* Fallback content while map loads */}
-        <div className="h-full flex items-center justify-center text-center text-gray-500">
-          <div>
-            <MapPin className="w-12 h-12 mx-auto mb-2" />
-            <p className="text-sm">Loading interactive map...</p>
-            <p className="text-xs">Click anywhere on the map to select location</p>
-          </div>
-        </div>
       </div>
 
       {locationName && (

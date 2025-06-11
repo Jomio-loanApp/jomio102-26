@@ -186,7 +186,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
           *,
           section_items (
             *,
-            products ( product_id, name, image_url, price_string, numeric_price, availability_status, is_active, unit_type, category_id )
+            products ( product_id, name, image_url, price_string, numeric_price, availability_status, is_active, unit_type, description, category_id )
           )
         `)
 

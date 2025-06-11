@@ -17,17 +17,17 @@ const CategoryScroller = () => {
 
   return (
     <div className={`
-      ${isHeaderSticky ? 'fixed top-0 left-0 right-0 z-40 bg-white shadow-md py-3' : 'relative'}
+      ${isHeaderSticky ? 'fixed top-20 left-0 right-0 z-40 bg-white shadow-md' : 'relative'}
       transition-all duration-300 ease-in-out
     `}>
-      <div className="px-4">
-        <div className="flex overflow-x-auto scrollbar-hide gap-4 pb-2">
+      <div className="px-4 py-3">
+        <div className="flex overflow-x-auto scrollbar-hide gap-4">
           {/* All Category */}
           <button
             onClick={() => setSelectedCategory(null)}
             className="flex-shrink-0 flex flex-col items-center min-w-[60px] transition-all duration-200"
           >
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-all duration-200 ${
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-200 ${
               selectedCategory === null 
                 ? 'bg-green-100 ring-2 ring-green-500' 
                 : 'bg-gray-100 hover:bg-gray-200'
@@ -51,7 +51,7 @@ const CategoryScroller = () => {
               onClick={() => setSelectedCategory(category.category_id)}
               className="flex-shrink-0 flex flex-col items-center min-w-[60px] transition-all duration-200"
             >
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 overflow-hidden transition-all duration-200 ${
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 overflow-hidden transition-all duration-200 ${
                 selectedCategory === category.category_id 
                   ? 'bg-green-100 ring-2 ring-green-500' 
                   : 'bg-gray-100 hover:bg-gray-200'

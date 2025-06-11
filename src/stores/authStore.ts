@@ -208,10 +208,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     window.addEventListener('focus', handleFocus)
     
-    // Cleanup function would go here in a real app
-    return () => {
-      window.removeEventListener('focus', handleFocus)
-    }
+    // Note: In a real app, you'd want to clean this up when the store is destroyed
+    // For now, we'll leave it as the store persists for the app lifetime
   },
 
   updateProfile: async (updates: Partial<Profile>) => {

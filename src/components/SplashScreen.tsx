@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 
 interface SplashScreenProps {
-  onComplete: () => void
+  onComplete?: () => void
 }
 
 const SplashScreen = ({ onComplete }: SplashScreenProps) => {
@@ -11,7 +11,11 @@ const SplashScreen = ({ onComplete }: SplashScreenProps) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVisible(false)
-      setTimeout(onComplete, 300) // Allow fade out animation
+      setTimeout(() => {
+        if (onComplete) {
+          onComplete()
+        }
+      }, 300) // Allow fade out animation
     }, 2500)
 
     return () => clearTimeout(timer)

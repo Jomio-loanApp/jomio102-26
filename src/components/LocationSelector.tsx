@@ -14,6 +14,7 @@ declare global {
   interface Window {
     google: any
     initMap: () => void
+    googleMapsLoaded: boolean
   }
 }
 
@@ -31,6 +32,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const mapInstanceRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
   const isMountedRef = useRef(true)
+  const scriptLoadedRef = useRef(false)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -146,7 +148,15 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   }
 
   const initializeGoogleMap = () => {
-    if (!window.google || !mapRef.current || mapInstanceRef.current || !isMountedRef.current) return
+    if (!window.google?.maps || !mapRef.current || mapInstanceRef.current || !isMountedRef.current) {
+      console.log('Cannot initialize map:', {
+        hasGoogle: !!window.google?.maps,
+        hasMapRef: !!mapRef.current,
+        hasMapInstance: !!mapInstanceRef.current,
+        isMounted: isMountedRef.current
+      })
+      return
+    }
 
     console.log('Initializing Google Map...')
 
@@ -197,28 +207,49 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     }
   }
 
-  const loadGoogleMaps = () => {
-    // Check if already loaded
-    if (window.google?.maps) {
-      setScriptsLoaded(true)
-      setTimeout(initializeGoogleMap, 100)
+  const loadGoogleMapsScript = () => {
+    // Prevent multiple script loads
+    if (window.googleMapsLoaded || scriptLoadedRef.current) {
+      console.log('Google Maps already loaded or loading')
+      if (window.google?.maps) {
+        setScriptsLoaded(true)
+        setTimeout(initializeGoogleMap, 100)
+      }
       return
     }
 
     // Check if script already exists
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
     if (existingScript) {
-      // Script exists, wait for it to load
-      const checkGoogle = setInterval(() => {
+      console.log('Google Maps script already exists in DOM')
+      scriptLoadedRef.current = true
+      
+      // Wait for it to load
+      const checkInterval = setInterval(() => {
         if (window.google?.maps && isMountedRef.current) {
-          clearInterval(checkGoogle)
+          clearInterval(checkInterval)
+          window.googleMapsLoaded = true
           setScriptsLoaded(true)
           setTimeout(initializeGoogleMap, 100)
         }
       }, 100)
       
-      setTimeout(() => clearInterval(checkGoogle), 10000)
+      // Clear interval after 10 seconds to prevent infinite checking
+      setTimeout(() => clearInterval(checkInterval), 10000)
       return
+    }
+
+    console.log('Loading Google Maps script...')
+    scriptLoadedRef.current = true
+
+    // Create callback function
+    window.initMap = () => {
+      console.log('Google Maps API loaded via callback')
+      if (isMountedRef.current) {
+        window.googleMapsLoaded = true
+        setScriptsLoaded(true)
+        setTimeout(initializeGoogleMap, 100)
+      }
     }
 
     // Create and load script
@@ -227,16 +258,9 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     script.async = true
     script.defer = true
 
-    window.initMap = () => {
-      console.log('Google Maps API loaded via callback')
-      if (isMountedRef.current) {
-        setScriptsLoaded(true)
-        setTimeout(initializeGoogleMap, 100)
-      }
-    }
-
     script.onerror = () => {
       console.error('Failed to load Google Maps script')
+      scriptLoadedRef.current = false
       if (isMountedRef.current) {
         setScriptsLoaded(false)
       }
@@ -247,12 +271,32 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
   useEffect(() => {
     isMountedRef.current = true
-    loadGoogleMaps()
+    
+    // Check if Google Maps is already available
+    if (window.google?.maps) {
+      console.log('Google Maps already available')
+      setScriptsLoaded(true)
+      setTimeout(initializeGoogleMap, 100)
+    } else {
+      loadGoogleMapsScript()
+    }
     
     return () => {
+      console.log('LocationSelector cleanup')
       isMountedRef.current = false
-      mapInstanceRef.current = null
-      markerRef.current = null
+      
+      // Clean up map instance but don't remove script
+      if (mapInstanceRef.current) {
+        try {
+          // Remove event listeners
+          window.google?.maps?.event?.clearInstanceListeners?.(mapInstanceRef.current)
+          window.google?.maps?.event?.clearInstanceListeners?.(markerRef.current)
+        } catch (error) {
+          console.error('Error cleaning up map listeners:', error)
+        }
+        mapInstanceRef.current = null
+        markerRef.current = null
+      }
     }
   }, [])
 

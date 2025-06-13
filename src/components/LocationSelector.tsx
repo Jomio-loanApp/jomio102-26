@@ -14,7 +14,6 @@ declare global {
   interface Window {
     google: any
     initMap: () => void
-    googleMapsLoaded?: boolean
   }
 }
 
@@ -27,11 +26,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const [manualAddress, setManualAddress] = useState('')
   const [isGettingLocationName, setIsGettingLocationName] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [scriptsLoaded, setScriptsLoaded] = useState(!!window.google)
+  const [scriptsLoaded, setScriptsLoaded] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
-  const componentMountedRef = useRef<boolean>(true)
+  const isMountedRef = useRef(true)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -77,21 +76,21 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   }
 
   const handleLocationChange = async (lat: number, lng: number) => {
-    if (!componentMountedRef.current) return
+    if (!isMountedRef.current) return
     
     try {
       console.log('Location changed to:', lat, lng)
       setPosition([lat, lng])
       
       const name = await getLocationName(lat, lng)
-      if (componentMountedRef.current) {
+      if (isMountedRef.current) {
         setLocationName(name)
         onLocationSelect(lat, lng, name)
       }
       
     } catch (error) {
       console.error('Error handling location change:', error)
-      if (componentMountedRef.current) {
+      if (isMountedRef.current) {
         const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
         setLocationName(fallbackName)
         onLocationSelect(lat, lng, fallbackName)
@@ -104,7 +103,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          if (!componentMountedRef.current) return
+          if (!isMountedRef.current) return
           
           const { latitude, longitude } = position.coords
           console.log('Got current location:', latitude, longitude)
@@ -121,7 +120,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         },
         (error) => {
           console.error('Error getting current location:', error)
-          if (componentMountedRef.current) {
+          if (isMountedRef.current) {
             setIsLocating(false)
             alert('Unable to get your current location. Please select on the map.')
           }
@@ -147,7 +146,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   }
 
   const initializeGoogleMap = () => {
-    if (!window.google || !mapRef.current || mapInstanceRef.current || !componentMountedRef.current) return
+    if (!window.google || !mapRef.current || mapInstanceRef.current || !isMountedRef.current) return
 
     console.log('Initializing Google Map...')
 
@@ -176,7 +175,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
       // Map click event
       mapInstanceRef.current.addListener('click', (event: any) => {
-        if (!componentMountedRef.current) return
+        if (!isMountedRef.current) return
         const lat = event.latLng.lat()
         const lng = event.latLng.lng()
         markerRef.current.setPosition({ lat, lng })
@@ -185,7 +184,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
       // Marker drag event
       markerRef.current.addListener('dragend', (event: any) => {
-        if (!componentMountedRef.current) return
+        if (!isMountedRef.current) return
         const lat = event.latLng.lat()
         const lng = event.latLng.lng()
         handleLocationChange(lat, lng)
@@ -199,44 +198,38 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   }
 
   const loadGoogleMaps = () => {
-    // Check if already loaded globally
-    if (window.google && window.googleMapsLoaded) {
+    // Check if already loaded
+    if (window.google?.maps) {
       setScriptsLoaded(true)
       initializeGoogleMap()
       return
     }
 
-    // Check if currently loading
-    if (window.googleMapsLoaded === false) {
-      // Script is currently loading, wait for it
-      const checkInterval = setInterval(() => {
-        if (window.google && window.googleMapsLoaded) {
-          clearInterval(checkInterval)
-          if (componentMountedRef.current) {
-            setScriptsLoaded(true)
-            initializeGoogleMap()
-          }
+    // Check if script already exists
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+    if (existingScript) {
+      // Script exists, wait for it to load
+      const checkGoogle = setInterval(() => {
+        if (window.google?.maps && isMountedRef.current) {
+          clearInterval(checkGoogle)
+          setScriptsLoaded(true)
+          initializeGoogleMap()
         }
       }, 100)
       
-      // Cleanup interval after 10 seconds
-      setTimeout(() => clearInterval(checkInterval), 10000)
+      setTimeout(() => clearInterval(checkGoogle), 10000)
       return
     }
 
-    // Mark as loading
-    window.googleMapsLoaded = false
-
-    // Create script tag to load Google Maps
+    // Create and load script
     const script = document.createElement('script')
     script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBgvl_eqV5JeJBP35Rg6fMT1lXHkBgN0vI&libraries=places&callback=initMap`
     script.async = true
     script.defer = true
 
     window.initMap = () => {
-      console.log('Google Maps API loaded')
-      window.googleMapsLoaded = true
-      if (componentMountedRef.current) {
+      console.log('Google Maps API loaded via callback')
+      if (isMountedRef.current) {
         setScriptsLoaded(true)
         initializeGoogleMap()
       }
@@ -244,8 +237,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
     script.onerror = () => {
       console.error('Failed to load Google Maps script')
-      window.googleMapsLoaded = undefined
-      if (componentMountedRef.current) {
+      if (isMountedRef.current) {
         setScriptsLoaded(false)
       }
     }
@@ -254,13 +246,12 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   }
 
   useEffect(() => {
-    componentMountedRef.current = true
+    isMountedRef.current = true
     loadGoogleMaps()
     
     return () => {
-      componentMountedRef.current = false
-      
-      // Only clear references, don't manipulate DOM
+      isMountedRef.current = false
+      // Clean up references without DOM manipulation
       mapInstanceRef.current = null
       markerRef.current = null
     }
@@ -268,7 +259,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
   // Update map when position changes externally
   useEffect(() => {
-    if (mapInstanceRef.current && markerRef.current && selectedPosition && componentMountedRef.current) {
+    if (mapInstanceRef.current && markerRef.current && selectedPosition && isMountedRef.current) {
       const newPos = { lat: selectedPosition[0], lng: selectedPosition[1] }
       mapInstanceRef.current.setCenter(newPos)
       markerRef.current.setPosition(newPos)

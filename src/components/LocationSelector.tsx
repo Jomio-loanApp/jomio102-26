@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { MapPin, Navigation, Loader2 } from 'lucide-react'
@@ -30,7 +29,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
-  const scriptRef = useRef<HTMLScriptElement | null>(null)
+  const scriptLoadedRef = useRef<boolean>(false)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -192,17 +191,18 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       return
     }
 
-    if (scriptRef.current) {
-      // Script already loading
+    if (scriptLoadedRef.current) {
+      // Script already loading or loaded
       return
     }
+
+    scriptLoadedRef.current = true
 
     // Create script tag to load Google Maps
     const script = document.createElement('script')
     script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBgvl_eqV5JeJBP35Rg6fMT1lXHkBgN0vI&libraries=places&callback=initMap`
     script.async = true
     script.defer = true
-    scriptRef.current = script
 
     window.initMap = () => {
       console.log('Google Maps API loaded')
@@ -213,6 +213,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     script.onerror = () => {
       console.error('Failed to load Google Maps script')
       setScriptsLoaded(false)
+      scriptLoadedRef.current = false
     }
 
     document.head.appendChild(script)
@@ -222,35 +223,22 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     loadGoogleMaps()
     
     return () => {
-      // Cleanup: Remove script and clear references
-      if (scriptRef.current && document.head.contains(scriptRef.current)) {
-        try {
-          document.head.removeChild(scriptRef.current)
-        } catch (error) {
-          console.log('Script already removed or not found')
-        }
-      }
-      
-      // Clear map references
+      // Clear map references without DOM manipulation
       if (mapInstanceRef.current) {
-        try {
-          // Don't call any methods on the map instance during cleanup
-          mapInstanceRef.current = null
-        } catch (error) {
-          console.log('Error during map cleanup:', error)
-        }
+        mapInstanceRef.current = null
       }
       
       if (markerRef.current) {
         markerRef.current = null
       }
       
-      scriptRef.current = null
-      
-      // Clear the global callback
+      // Clear the global callback safely
       if (window.initMap) {
         delete window.initMap
       }
+      
+      // Reset script loading flag
+      scriptLoadedRef.current = false
     }
   }, [])
 

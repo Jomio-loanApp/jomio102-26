@@ -26,9 +26,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const [manualAddress, setManualAddress] = useState('')
   const [isGettingLocationName, setIsGettingLocationName] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
+  const [scriptsLoaded, setScriptsLoaded] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
+  const scriptRef = useRef<HTMLScriptElement | null>(null)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -138,50 +140,60 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
 
     console.log('Initializing Google Map...')
 
-    const mapOptions = {
-      center: { lat: position[0], lng: position[1] },
-      zoom: 15,
-      mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-      zoomControl: true,
-      mapTypeControl: false,
-      scaleControl: true,
-      streetViewControl: false,
-      rotateControl: false,
-      fullscreenControl: true
+    try {
+      const mapOptions = {
+        center: { lat: position[0], lng: position[1] },
+        zoom: 15,
+        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+        zoomControl: true,
+        mapTypeControl: false,
+        scaleControl: true,
+        streetViewControl: false,
+        rotateControl: false,
+        fullscreenControl: true
+      }
+
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, mapOptions)
+
+      // Add marker
+      markerRef.current = new window.google.maps.Marker({
+        position: { lat: position[0], lng: position[1] },
+        map: mapInstanceRef.current,
+        draggable: true,
+        title: 'Delivery Location'
+      })
+
+      // Map click event
+      mapInstanceRef.current.addListener('click', (event: any) => {
+        const lat = event.latLng.lat()
+        const lng = event.latLng.lng()
+        markerRef.current.setPosition({ lat, lng })
+        handleLocationChange(lat, lng)
+      })
+
+      // Marker drag event
+      markerRef.current.addListener('dragend', (event: any) => {
+        const lat = event.latLng.lat()
+        const lng = event.latLng.lng()
+        handleLocationChange(lat, lng)
+      })
+
+      setMapLoaded(true)
+      console.log('Google Map initialized successfully')
+    } catch (error) {
+      console.error('Error initializing Google Map:', error)
     }
-
-    mapInstanceRef.current = new window.google.maps.Map(mapRef.current, mapOptions)
-
-    // Add marker
-    markerRef.current = new window.google.maps.Marker({
-      position: { lat: position[0], lng: position[1] },
-      map: mapInstanceRef.current,
-      draggable: true,
-      title: 'Delivery Location'
-    })
-
-    // Map click event
-    mapInstanceRef.current.addListener('click', (event: any) => {
-      const lat = event.latLng.lat()
-      const lng = event.latLng.lng()
-      markerRef.current.setPosition({ lat, lng })
-      handleLocationChange(lat, lng)
-    })
-
-    // Marker drag event
-    markerRef.current.addListener('dragend', (event: any) => {
-      const lat = event.latLng.lat()
-      const lng = event.latLng.lng()
-      handleLocationChange(lat, lng)
-    })
-
-    setMapLoaded(true)
-    console.log('Google Map initialized successfully')
   }
 
   const loadGoogleMaps = () => {
     if (window.google) {
+      setScriptsLoaded(true)
       initializeGoogleMap()
+      return
+    }
+
+    if (scriptRef.current) {
+      // Script already loading
       return
     }
 
@@ -190,10 +202,17 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBgvl_eqV5JeJBP35Rg6fMT1lXHkBgN0vI&libraries=places&callback=initMap`
     script.async = true
     script.defer = true
+    scriptRef.current = script
 
     window.initMap = () => {
       console.log('Google Maps API loaded')
+      setScriptsLoaded(true)
       initializeGoogleMap()
+    }
+
+    script.onerror = () => {
+      console.error('Failed to load Google Maps script')
+      setScriptsLoaded(false)
     }
 
     document.head.appendChild(script)
@@ -203,8 +222,34 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     loadGoogleMaps()
     
     return () => {
+      // Cleanup: Remove script and clear references
+      if (scriptRef.current && document.head.contains(scriptRef.current)) {
+        try {
+          document.head.removeChild(scriptRef.current)
+        } catch (error) {
+          console.log('Script already removed or not found')
+        }
+      }
+      
+      // Clear map references
       if (mapInstanceRef.current) {
-        // Cleanup would go here
+        try {
+          // Don't call any methods on the map instance during cleanup
+          mapInstanceRef.current = null
+        } catch (error) {
+          console.log('Error during map cleanup:', error)
+        }
+      }
+      
+      if (markerRef.current) {
+        markerRef.current = null
+      }
+      
+      scriptRef.current = null
+      
+      // Clear the global callback
+      if (window.initMap) {
+        delete window.initMap
       }
     }
   }, [])

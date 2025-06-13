@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { MapPin, Navigation, Loader2 } from 'lucide-react'
@@ -160,6 +161,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     console.log('Initializing Google Map...')
 
     try {
+      // Clear any existing content in the map container
+      if (mapRef.current) {
+        mapRef.current.innerHTML = ''
+      }
+
       const mapOptions = {
         center: { lat: position[0], lng: position[1] },
         zoom: 15,
@@ -284,12 +290,18 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       console.log('LocationSelector cleanup')
       isMountedRef.current = false
       
-      // Simplified cleanup - just clear references, don't try to manipulate DOM
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current = null
-      }
-      if (markerRef.current) {
-        markerRef.current = null
+      // Clear references without touching DOM
+      mapInstanceRef.current = null
+      markerRef.current = null
+      
+      // Clear the map container content to prevent React from trying to manage Google Maps DOM
+      if (mapRef.current) {
+        // Use setTimeout to ensure this runs after React's cleanup
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.innerHTML = ''
+          }
+        }, 0)
       }
     }
   }, [])
@@ -332,6 +344,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         <div 
           ref={mapRef}
           className="h-[50vh] min-h-[300px] w-full rounded-lg overflow-hidden border bg-gray-100 z-10"
+          style={{ isolation: 'isolate' }}
         >
           {/* Loading overlay */}
           {!mapLoaded && (

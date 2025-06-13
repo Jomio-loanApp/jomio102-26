@@ -167,7 +167,8 @@ const SelectAddressPage = () => {
                           e.stopPropagation()
                           handleSelectAddress(address)
                         }}
-                        className="bg-green-600 hover:bg-green-700"
+                        style={{ backgroundColor: '#23b14d' }}
+                        className="hover:bg-green-700"
                         size="sm"
                       >
                         Deliver Here
@@ -185,7 +186,7 @@ const SelectAddressPage = () => {
                 <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="font-medium text-gray-900 mb-2">No Saved Addresses</h3>
                 <p className="text-gray-600 mb-4">You haven't saved any delivery addresses yet.</p>
-                <Button onClick={handleAddNewAddress} className="bg-green-600 hover:bg-green-700">
+                <Button onClick={handleAddNewAddress} style={{ backgroundColor: '#23b14d' }} className="hover:bg-green-700">
                   Add Your First Address
                 </Button>
               </CardContent>

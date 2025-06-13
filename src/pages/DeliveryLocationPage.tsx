@@ -85,7 +85,7 @@ const DeliveryLocationPage = () => {
     setIsSaving(true)
 
     try {
-      // For logged-in users, save the address
+      // For logged-in users, save the address automatically
       if (user) {
         const saved = await saveAddressForUser()
         if (!saved) {
@@ -193,7 +193,9 @@ const DeliveryLocationPage = () => {
                 <Button
                   onClick={handleConfirmLocation}
                   disabled={isSaving}
-                  className="w-full mt-4 bg-green-600 hover:bg-green-700"
+                  className="w-full mt-4"
+                  style={{ backgroundColor: '#23b14d' }}
+                  className="hover:bg-green-700"
                   size="lg"
                 >
                   {isSaving ? (

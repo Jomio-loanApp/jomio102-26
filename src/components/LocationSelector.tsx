@@ -201,7 +201,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     // Check if already loaded
     if (window.google?.maps) {
       setScriptsLoaded(true)
-      initializeGoogleMap()
+      setTimeout(initializeGoogleMap, 100)
       return
     }
 
@@ -213,7 +213,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         if (window.google?.maps && isMountedRef.current) {
           clearInterval(checkGoogle)
           setScriptsLoaded(true)
-          initializeGoogleMap()
+          setTimeout(initializeGoogleMap, 100)
         }
       }, 100)
       
@@ -231,7 +231,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       console.log('Google Maps API loaded via callback')
       if (isMountedRef.current) {
         setScriptsLoaded(true)
-        initializeGoogleMap()
+        setTimeout(initializeGoogleMap, 100)
       }
     }
 
@@ -251,7 +251,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     
     return () => {
       isMountedRef.current = false
-      // Clean up references without DOM manipulation
       mapInstanceRef.current = null
       markerRef.current = null
     }
@@ -290,16 +289,15 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         </div>
       </div>
 
-      {/* Google Map container */}
+      {/* Google Map container with explicit height */}
       <div className="relative">
         <div 
           ref={mapRef}
-          className="h-64 md:h-80 lg:h-96 w-full rounded-lg overflow-hidden border bg-gray-100"
-          style={{ minHeight: '320px' }}
+          className="h-[50vh] min-h-[300px] w-full rounded-lg overflow-hidden border bg-gray-100 z-10"
         >
           {/* Loading overlay */}
           {!mapLoaded && (
-            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-10">
+            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-20">
               <div className="text-center">
                 <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-gray-400" />
                 <p className="text-sm text-gray-600">Loading map...</p>
@@ -310,7 +308,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         
         {/* Location name loading overlay */}
         {isGettingLocationName && (
-          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center z-20 rounded-lg">
+          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center z-30 rounded-lg">
             <div className="bg-white p-3 rounded-lg flex items-center space-x-2">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span className="text-sm">Getting location...</span>

@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { MapPin, Clock, CreditCard, ShoppingBag, Loader2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, MapPin, Clock, CreditCard, ShoppingBag, Loader2, AlertCircle } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 interface DeliveryOption {
@@ -25,15 +25,15 @@ interface DeliveryOption {
 }
 
 const CheckoutPage = () => {
+  const navigate = useNavigate()
   const { user, profile } = useAuthStore()
   const { items, getSubtotal, clearCart } = useCartStore()
   const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
-  const navigate = useNavigate()
 
-  // Form states
+  // Form states - NO DEFAULT DELIVERY OPTION
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('') // No default selection
+  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('')
   const [customerNotes, setCustomerNotes] = useState('')
   
   // Data states
@@ -42,82 +42,59 @@ const CheckoutPage = () => {
   const [minimumOrderValue, setMinimumOrderValue] = useState(0)
   
   // UI states
-  const [isLoading, setIsLoading] = useState(true)
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [isLoadingOptions, setIsLoadingOptions] = useState(false)
-  const [isCalculatingCharge, setIsCalculatingCharge] = useState(false)
-  const [deliveryOptionsError, setDeliveryOptionsError] = useState<string | null>(null)
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+  const [optionsError, setOptionsError] = useState<string | null>(null)
 
   useEffect(() => {
-    console.log('CheckoutPage: Component mounted, cart items:', items.length)
-    
+    // Redirect if no items or location
     if (items.length === 0) {
-      console.log('CheckoutPage: No items in cart, redirecting to cart page')
       navigate('/cart')
       return
     }
-
-    if (!deliveryLat || !deliveryLng) {
-      console.log('CheckoutPage: No delivery location set, redirecting to location selection')
-      
-      // For logged-in users, redirect to address selection
-      if (user) {
-        navigate('/select-address')
-      } else {
-        navigate('/set-delivery-location')
-      }
+    
+    if (!deliveryLat || !deliveryLng || !deliveryLocationName) {
+      navigate('/select-address')
       return
     }
     
-    initializeCheckout()
-  }, [user, profile, items.length, deliveryLat, deliveryLng, navigate])
+    // Initialize form with user data if available
+    if (user && profile) {
+      setCustomerName(profile.full_name || '')
+      setCustomerPhone(profile.phone_number || '')
+    }
+    
+    fetchInitialData()
+  }, [items.length, deliveryLat, deliveryLng, user, profile, navigate])
 
   useEffect(() => {
-    // Only calculate delivery charge when instant delivery is explicitly selected
+    // Only calculate delivery charge when instant delivery is selected
     if (selectedDeliveryOption === 'instant' && deliveryLat && deliveryLng) {
       calculateDeliveryCharge()
     } else {
-      // Clear delivery charge for other options
       setDeliveryCharge(0)
     }
   }, [selectedDeliveryOption, deliveryLat, deliveryLng])
 
-  const initializeCheckout = async () => {
-    setIsLoading(true)
-    
-    try {
-      await Promise.all([
-        fetchShopSettings(),
-        fetchDeliveryOptions()
-      ])
-
-      // Pre-fill customer info if logged in
-      if (user && profile) {
-        setCustomerName(profile.full_name || '')
-        setCustomerPhone(profile.phone_number || '')
-      }
-    } catch (error) {
-      console.error('Error initializing checkout:', error)
-    } finally {
-      setIsLoading(false)
-    }
+  const fetchInitialData = async () => {
+    await Promise.all([
+      fetchShopSettings(),
+      fetchDeliveryOptions()
+    ])
   }
 
   const fetchShopSettings = async () => {
     try {
-      console.log('CheckoutPage: Fetching shop settings...')
+      console.log('Fetching shop settings...')
       const { data, error } = await supabase
         .from('shop_settings')
         .select('minimum_order_value')
         .single()
 
-      if (error) {
-        console.error('CheckoutPage: Error fetching shop settings:', error)
-        throw error
-      }
+      if (error) throw error
       
-      console.log('CheckoutPage: Shop settings fetched:', data)
       setMinimumOrderValue(data?.minimum_order_value || 0)
+      console.log('Shop settings loaded:', data)
     } catch (error) {
       console.error('Error fetching shop settings:', error)
       setMinimumOrderValue(0)
@@ -127,46 +104,25 @@ const CheckoutPage = () => {
   const fetchDeliveryOptions = async () => {
     try {
       setIsLoadingOptions(true)
-      setDeliveryOptionsError(null)
-      console.log('CheckoutPage: Fetching delivery options...')
+      setOptionsError(null)
+      console.log('Fetching delivery options...')
       
       const { data, error } = await supabase.functions.invoke('get-available-delivery-options')
       
-      if (error) {
-        console.error('CheckoutPage: Error fetching delivery options:', error)
-        throw error
-      }
+      if (error) throw error
       
-      console.log('CheckoutPage: Delivery options response:', data)
-      
-      let optionsArray: DeliveryOption[] = []
-      
-      if (Array.isArray(data)) {
-        optionsArray = data
-      } else if (data && typeof data === 'object') {
-        if (data.delivery_options && Array.isArray(data.delivery_options)) {
-          optionsArray = data.delivery_options
-        } else {
-          optionsArray = [data]
-        }
-      } else {
-        throw new Error('Invalid delivery options format')
-      }
-      
-      setDeliveryOptions(optionsArray)
-      
-      // Do not set default selection - user must choose explicitly
-      
+      setDeliveryOptions(data || [])
+      console.log('Delivery options loaded:', data)
     } catch (error) {
       console.error('Error fetching delivery options:', error)
-      setDeliveryOptionsError('Failed to load delivery options. Using default options.')
+      setOptionsError('Unable to load delivery options from server. Using defaults.')
       
+      // Fallback options
       const fallbackOptions = [
         { type: 'instant', label: 'Instant Delivery (30-45 min)', charge: 0 },
         { type: 'morning', label: 'Morning Delivery (Tomorrow 7 AM - 9 AM)', charge: 0 },
         { type: 'evening', label: 'Evening Delivery (Tomorrow 6 PM - 8 PM)', charge: 0 },
       ]
-      console.log('CheckoutPage: Using fallback delivery options:', fallbackOptions)
       setDeliveryOptions(fallbackOptions)
     } finally {
       setIsLoadingOptions(false)
@@ -177,165 +133,98 @@ const CheckoutPage = () => {
     if (!deliveryLat || !deliveryLng) return
 
     try {
-      setIsCalculatingCharge(true)
-      console.log('CheckoutPage: Calculating delivery charge for location:', { deliveryLat, deliveryLng })
-      
+      console.log('Calculating delivery charge...')
       const { data, error } = await supabase.functions.invoke('calculate-delivery-charge', {
-        body: { 
-          p_customer_lat: deliveryLat, 
-          p_customer_lon: deliveryLng 
-        }
+        body: { p_customer_lat: deliveryLat, p_customer_lon: deliveryLng }
       })
       
-      if (error) {
-        console.error('CheckoutPage: Error calculating delivery charge:', error)
-        throw error
-      }
+      if (error) throw error
       
-      console.log('CheckoutPage: Delivery charge response:', data)
-      
-      if (data && typeof data.delivery_charge === 'number') {
-        setDeliveryCharge(data.delivery_charge)
-      } else {
-        throw new Error('Invalid delivery charge response format')
-      }
-      
+      setDeliveryCharge(data?.delivery_charge || 0)
+      console.log('Delivery charge calculated:', data)
     } catch (error) {
       console.error('Error calculating delivery charge:', error)
-      const fallbackCharge = 20
-      console.log('CheckoutPage: Using fallback delivery charge:', fallbackCharge)
+      const fallbackCharge = 25
       setDeliveryCharge(fallbackCharge)
-      
-      toast({
-        title: "Could not calculate delivery charge",
-        description: "Using standard delivery charge.",
-        variant: "destructive"
-      })
-    } finally {
-      setIsCalculatingCharge(false)
+      console.log('Using fallback delivery charge:', fallbackCharge)
     }
   }
 
   const handlePlaceOrder = async () => {
-    console.log('CheckoutPage: Placing order...')
+    // Validation
+    if (!customerName.trim() || !customerPhone.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in your name and phone number.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!selectedDeliveryOption) {
+      toast({
+        title: "Select Delivery Option",
+        description: "Please choose a delivery option to continue.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsPlacingOrder(true)
 
     try {
-      const finalDeliveryCharge = selectedDeliveryOption === 'instant' ? deliveryCharge : 0
-      
-      // Prepare cart data
-      const cartData = items.map(item => ({
-        product_id: parseInt(item.product_id),
-        quantity: item.quantity
-      }))
+      const orderData = {
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        delivery_latitude: deliveryLat,
+        delivery_longitude: deliveryLng,
+        delivery_location_name: deliveryLocationName,
+        delivery_type: selectedDeliveryOption,
+        customer_notes: customerNotes,
+        cart_items: items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, ''))
+        }))
+      }
 
-      console.log('CheckoutPage: Order data prepared:', {
-        user: !!user,
-        cartData,
-        deliveryInfo: { deliveryLat, deliveryLng, deliveryLocationName },
-        deliveryType: selectedDeliveryOption,
-        deliveryCharge: finalDeliveryCharge
-      })
+      console.log('Placing order with data:', orderData)
 
+      let result
       if (user) {
-        // Authenticated order
-        console.log('CheckoutPage: User is authenticated, creating authenticated order')
-        
-        const orderData = {
-          p_delivery_lat: deliveryLat,
-          p_delivery_lon: deliveryLng,
-          p_delivery_location_name: deliveryLocationName,
-          p_delivery_type: selectedDeliveryOption,
-          p_cart: cartData,
-          p_customer_notes: customerNotes || null
-        }
-
-        console.log('CheckoutPage: Creating authenticated order with data:', orderData)
-
-        const { data, error } = await supabase.functions.invoke('create-authenticated-order', {
+        // Authenticated user
+        result = await supabase.functions.invoke('create-authenticated-order', {
           body: orderData
         })
-
-        if (error) {
-          console.error('CheckoutPage: Authenticated order creation failed:', error)
-          throw error
-        }
-
-        console.log('CheckoutPage: Authenticated order created successfully:', data)
-        
-        if (data && data.order_id) {
-          clearCart()
-          navigate(`/order-confirmation/${data.order_id}`)
-          
-          toast({
-            title: "Order placed successfully!",
-            description: "Thank you for your order. You will receive updates soon.",
-          })
-        } else {
-          throw new Error('Order created but no order ID returned')
-        }
-        
       } else {
-        // Guest order
-        console.log('CheckoutPage: User is guest, creating guest order')
-        
-        if (!customerName || !customerPhone) {
-          throw new Error('Customer name and phone are required for guest orders')
-        }
-        
-        const orderData = {
-          p_name: customerName,
-          p_phone: customerPhone,
-          p_delivery_lat: deliveryLat,
-          p_delivery_lon: deliveryLng,
-          p_delivery_location_name: deliveryLocationName,
-          p_delivery_type: selectedDeliveryOption,
-          p_cart: cartData
-        }
-
-        console.log('CheckoutPage: Creating guest order with data:', orderData)
-
-        const { data, error } = await supabase.functions.invoke('create-guest-order', {
+        // Guest user
+        result = await supabase.functions.invoke('create-guest-order', {
           body: orderData
         })
-
-        if (error) {
-          console.error('CheckoutPage: Guest order creation failed:', error)
-          throw error
-        }
-
-        console.log('CheckoutPage: Guest order created successfully:', data)
-        
-        if (data && data.order_id) {
-          clearCart()
-          navigate(`/order-confirmation/${data.order_id}`)
-          
-          toast({
-            title: "Order placed successfully!",
-            description: "Thank you for your order. You will receive updates soon.",
-          })
-        } else {
-          throw new Error('Order created but no order ID returned')
-        }
       }
-      
-    } catch (error) {
-      console.error('CheckoutPage: Order creation failed:', error)
-      let errorMessage = "Failed to place your order. Please try again."
-      
-      if (error.message?.includes('401')) {
-        errorMessage = "Please log in again to place your order."
-      } else if (error.message?.includes('400')) {
-        errorMessage = "Please check your order details and try again."
-      } else if (error.message?.includes('500')) {
-        errorMessage = "Server error. Please try again in a moment."
-      } else if (error.message?.includes('Customer name')) {
-        errorMessage = "Please enter your name and phone number."
+
+      if (result.error) {
+        throw result.error
       }
+
+      console.log('Order placed successfully:', result.data)
+      
+      // Clear cart and navigate to success page
+      clearCart()
+      
+      const orderId = result.data?.order_id || 'unknown'
+      navigate(`/order-confirmation/${orderId}`)
       
       toast({
-        title: "Order failed",
-        description: errorMessage,
+        title: "Order Placed Successfully!",
+        description: "You will receive a confirmation shortly.",
+      })
+
+    } catch (error) {
+      console.error('Error placing order:', error)
+      toast({
+        title: "Order Failed",
+        description: "Failed to place order. Please check your details and try again.",
         variant: "destructive",
       })
     } finally {
@@ -344,295 +233,232 @@ const CheckoutPage = () => {
   }
 
   const subtotal = getSubtotal()
-  const finalDeliveryCharge = selectedDeliveryOption === 'instant' ? deliveryCharge : 0
-  const totalAmount = subtotal + finalDeliveryCharge
-  const canProceed = subtotal >= minimumOrderValue && customerName && customerPhone && selectedDeliveryOption
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showSearch={false} />
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            {[...Array(3)].map((_, index) => (
-              <div key={index} className="bg-white p-6 rounded-lg border">
-                <div className="flex space-x-4">
-                  <div className="w-20 h-20 bg-gray-200 rounded"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!canProceed && subtotal < minimumOrderValue) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <Header showSearch={false} />
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Card className="border-yellow-200 bg-yellow-50">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <ShoppingBag className="w-8 h-8 text-yellow-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                  Minimum Order Not Met
-                </h2>
-                <p className="text-gray-600 mb-4">
-                  Minimum order value is ₹{minimumOrderValue.toFixed(2)}.
-                  Please add items worth ₹{(minimumOrderValue - subtotal).toFixed(2)} more.
-                </p>
-                <Button onClick={() => navigate('/cart')} className="bg-green-600 hover:bg-green-700">
-                  Go Back to Cart
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
+  const total = subtotal + deliveryCharge
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-gray-50">
       <Header showSearch={false} />
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-1 h-8 bg-green-600 rounded-full"></div>
-              <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
-            </div>
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center space-x-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="p-2"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
+          </div>
 
-            {/* Customer Information */}
-            <Card className="border-gray-200 shadow-sm">
-              <CardHeader className="bg-gray-50 border-b border-gray-200">
-                <CardTitle className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">1</div>
-                  <span>Customer Information</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 p-6">
-                <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Left Column - Forms */}
+            <div className="space-y-6">
+              {/* Customer Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name *</Label>
                     <Input
                       id="name"
+                      placeholder="Enter your full name"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      required
-                      className="focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number *</Label>
                     <Input
                       id="phone"
+                      placeholder="Enter your phone number"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
-                      required
-                      className="focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Delivery Address Confirmation */}
-            <Card className="border-gray-200 shadow-sm">
-              <CardHeader className="bg-gray-50 border-b border-gray-200">
-                <CardTitle className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">2</div>
-                  <span>Delivery Address</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-3">
-                  <MapPin className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{deliveryLocationName}</div>
-                    <div className="text-sm text-gray-600 mt-1">
-                      Coordinates: {deliveryLat?.toFixed(6)}, {deliveryLng?.toFixed(6)}
-                    </div>
-                  </div>
-                  <Button 
-                    variant="outline" 
+              {/* Delivery Address */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <MapPin className="w-5 h-5" />
+                    <span>Delivery Address</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600">{deliveryLocationName}</p>
+                  <Button
+                    variant="outline"
                     size="sm"
-                    onClick={() => navigate(user ? '/select-address' : '/set-delivery-location')}
+                    className="mt-2"
+                    onClick={() => navigate('/select-address')}
                   >
-                    Change
+                    Change Address
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Delivery Options */}
-            <Card className="border-gray-200 shadow-sm">
-              <CardHeader className="bg-gray-50 border-b border-gray-200">
-                <CardTitle className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">3</div>
-                  <span>Delivery Options</span>
-                  {isLoadingOptions && <Loader2 className="w-4 h-4 animate-spin" />}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                {deliveryOptionsError && (
-                  <Alert className="mb-4 border-yellow-200 bg-yellow-50">
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <AlertDescription className="text-yellow-700">{deliveryOptionsError}</AlertDescription>
-                  </Alert>
-                )}
-                
-                {!selectedDeliveryOption && (
-                  <Alert className="mb-4 border-blue-200 bg-blue-50">
-                    <AlertCircle className="h-4 w-4 text-blue-600" />
-                    <AlertDescription className="text-blue-700">
-                      Please select a delivery option to continue
-                    </AlertDescription>
-                  </Alert>
-                )}
-                
-                {isLoadingOptions ? (
-                  <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
-                      <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
-                    ))}
-                  </div>
-                ) : (
-                  <RadioGroup value={selectedDeliveryOption} onValueChange={setSelectedDeliveryOption}>
-                    {deliveryOptions.map((option) => (
-                      <div key={option.type} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                        <RadioGroupItem value={option.type} id={option.type} className="text-green-600" />
-                        <div className="flex-1">
-                          <label htmlFor={option.type} className="font-medium cursor-pointer text-gray-900">
-                            {option.label}
-                          </label>
-                          {option.type === 'instant' && selectedDeliveryOption === 'instant' && (
-                            <div className="flex items-center space-x-2 mt-1">
-                              {isCalculatingCharge ? (
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                  Calculating charge...
-                                </div>
-                              ) : deliveryCharge > 0 ? (
-                                <p className="text-sm text-gray-600">₹{deliveryCharge} delivery charge</p>
-                              ) : null}
-                            </div>
-                          )}
-                        </div>
-                        <Clock className="w-5 h-5 text-gray-400" />
-                      </div>
-                    ))}
-                  </RadioGroup>
-                )}
-              </CardContent>
-            </Card>
+              {/* Delivery Options */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Clock className="w-5 h-5" />
+                    <span>Delivery Options</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingOptions ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    </div>
+                  ) : (
+                    <>
+                      {optionsError && (
+                        <Alert className="mb-4">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>{optionsError}</AlertDescription>
+                        </Alert>
+                      )}
+                      <RadioGroup
+                        value={selectedDeliveryOption}
+                        onValueChange={setSelectedDeliveryOption}
+                        className="space-y-3"
+                      >
+                        {deliveryOptions.map((option) => (
+                          <div key={option.type} className="flex items-center space-x-2">
+                            <RadioGroupItem value={option.type} id={option.type} />
+                            <Label htmlFor={option.type} className="flex-1 cursor-pointer">
+                              <div className="flex justify-between items-center">
+                                <span>{option.label}</span>
+                                {option.type === 'instant' && selectedDeliveryOption === 'instant' && deliveryCharge > 0 && (
+                                  <span className="text-sm text-green-600 font-medium">
+                                    +₹{deliveryCharge.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Order Notes */}
-            <Card className="border-gray-200 shadow-sm">
-              <CardHeader className="bg-gray-50 border-b border-gray-200">
-                <CardTitle className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">4</div>
-                  <span>Special Instructions</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Order Notes (Optional)</Label>
+              {/* Order Notes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Special Instructions (Optional)</CardTitle>
+                </CardHeader>
+                <CardContent>
                   <Textarea
-                    id="notes"
-                    placeholder="Any special instructions for your order..."
+                    placeholder="Any special delivery instructions..."
                     value={customerNotes}
                     onChange={(e) => setCustomerNotes(e.target.value)}
-                    className="focus:ring-green-500 focus:border-green-500"
                     rows={3}
                   />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Order Summary Sidebar */}
-          <div className="lg:col-span-1">
-            <Card className="sticky top-6 border-gray-200 shadow-sm">
-              <CardHeader className="bg-green-50 border-b border-green-100">
-                <CardTitle className="text-green-900">Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 p-6">
-                {/* Items */}
-                <div className="space-y-3">
+            {/* Right Column - Order Summary */}
+            <div className="space-y-6">
+              {/* Order Items */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <ShoppingBag className="w-5 h-5" />
+                    <span>Order Summary</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   {items.map((item) => (
-                    <div key={item.product_id} className="flex justify-between text-sm py-2 border-b border-gray-100">
-                      <span className="font-medium">{item.quantity}x {item.name}</span>
-                      <span className="font-semibold">₹{(parseFloat(item.price_string.replace(/[^\d.]/g, '')) * item.quantity).toFixed(2)}</span>
+                    <div key={item.product_id} className="flex items-center space-x-3">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <span>📦</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
+                        <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                      </div>
+                      <div className="text-sm font-semibold">
+                        ₹{(parseFloat(item.price_string.replace(/[^\d.]/g, '')) * item.quantity).toFixed(2)}
+                      </div>
                     </div>
                   ))}
-                </div>
+                </CardContent>
+              </Card>
 
-                <Separator />
-
-                {/* Costs */}
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
+              {/* Bill Summary */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Bill Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span className="font-medium">₹{subtotal.toFixed(2)}</span>
+                    <span>₹{subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Delivery:</span>
-                    <span className="font-medium">
-                      {isCalculatingCharge ? (
-                        <Loader2 className="w-3 h-3 animate-spin inline" />
-                      ) : (
-                        `₹${finalDeliveryCharge.toFixed(2)}`
-                      )}
-                    </span>
+                  <div className="flex justify-between">
+                    <span>Delivery Charge:</span>
+                    <span>₹{deliveryCharge.toFixed(2)}</span>
                   </div>
                   <Separator />
-                  <div className="flex justify-between font-bold text-lg">
+                  <div className="flex justify-between text-lg font-semibold">
                     <span>Total:</span>
-                    <span className="text-green-600">₹{totalAmount.toFixed(2)}</span>
+                    <span className="text-green-600">₹{total.toFixed(2)}</span>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
 
-                {/* Payment Method */}
-                <div className="pt-4">
-                  <div className="flex items-center space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <CreditCard className="w-6 h-6 text-blue-600" />
-                    <div>
-                      <div className="font-medium text-blue-900">Cash on Delivery</div>
-                      <div className="text-sm text-blue-700">Pay by cash or UPI upon delivery</div>
-                    </div>
-                  </div>
-                </div>
+              {/* Payment Method */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <CreditCard className="w-5 h-5" />
+                    <span>Payment Method</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600">Cash on Delivery</p>
+                </CardContent>
+              </Card>
 
-                {/* Place Order Button */}
-                <Button
-                  onClick={handlePlaceOrder}
-                  disabled={!canProceed || isPlacingOrder || isCalculatingCharge}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
-                  size="lg"
-                >
-                  {isPlacingOrder ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Placing Order...
-                    </>
-                  ) : (
-                    'Place Order'
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+              {/* Place Order Button */}
+              <Button
+                onClick={handlePlaceOrder}
+                disabled={isPlacingOrder || !selectedDeliveryOption}
+                className="w-full"
+                style={{ backgroundColor: '#23b14d' }}
+                size="lg"
+              >
+                {isPlacingOrder ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Placing Order...
+                  </>
+                ) : (
+                  `Place Order - ₹${total.toFixed(2)}`
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

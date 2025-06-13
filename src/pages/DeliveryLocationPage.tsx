@@ -193,9 +193,8 @@ const DeliveryLocationPage = () => {
                 <Button
                   onClick={handleConfirmLocation}
                   disabled={isSaving}
-                  className="w-full mt-4"
+                  className="w-full mt-4 hover:bg-green-700"
                   style={{ backgroundColor: '#23b14d' }}
-                  className="hover:bg-green-700"
                   size="lg"
                 >
                   {isSaving ? (

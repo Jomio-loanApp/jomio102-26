@@ -1,6 +1,7 @@
+
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { MapPin, Navigation, Loader2 } from 'lucide-react'
+import { MapPin, Navigation, Loader2, Target } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface LocationSelectorProps {
@@ -27,12 +28,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const [isGettingLocationName, setIsGettingLocationName] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [scriptsLoaded, setScriptsLoaded] = useState(false)
+  
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
-  const markerRef = useRef<any>(null)
   const isMountedRef = useRef(true)
   const scriptLoadedRef = useRef(false)
-  const mapDivRef = useRef<HTMLDivElement | null>(null)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -112,10 +112,9 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
           handleLocationChange(latitude, longitude)
           
           // Update map if loaded
-          if (mapInstanceRef.current && markerRef.current) {
+          if (mapInstanceRef.current) {
             const newPos = { lat: latitude, lng: longitude }
             mapInstanceRef.current.setCenter(newPos)
-            markerRef.current.setPosition(newPos)
           }
           
           setIsLocating(false)
@@ -161,23 +160,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     console.log('Initializing Google Map...')
 
     try {
-      // Create a completely isolated div for Google Maps
-      const mapDiv = document.createElement('div')
-      mapDiv.style.width = '100%'
-      mapDiv.style.height = '100%'
-      mapDiv.style.position = 'absolute'
-      mapDiv.style.top = '0'
-      mapDiv.style.left = '0'
-      mapDiv.id = `google-map-${Date.now()}`
-      
-      // Store reference to the map div
-      mapDivRef.current = mapDiv
-      
-      // Add to container
-      if (mapContainerRef.current) {
-        mapContainerRef.current.appendChild(mapDiv)
-      }
-
       const mapOptions = {
         center: { lat: position[0], lng: position[1] },
         zoom: 15,
@@ -187,38 +169,29 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         scaleControl: true,
         streetViewControl: false,
         rotateControl: false,
-        fullscreenControl: true
+        fullscreenControl: true,
+        disableDefaultUI: false
       }
 
-      mapInstanceRef.current = new window.google.maps.Map(mapDiv, mapOptions)
+      mapInstanceRef.current = new window.google.maps.Map(mapContainerRef.current, mapOptions)
 
-      // Add marker
-      markerRef.current = new window.google.maps.Marker({
-        position: { lat: position[0], lng: position[1] },
-        map: mapInstanceRef.current,
-        draggable: true,
-        title: 'Delivery Location'
-      })
-
-      // Map click event
-      mapInstanceRef.current.addListener('click', (event: any) => {
-        if (!isMountedRef.current) return
-        const lat = event.latLng.lat()
-        const lng = event.latLng.lng()
-        markerRef.current.setPosition({ lat, lng })
-        handleLocationChange(lat, lng)
-      })
-
-      // Marker drag event
-      markerRef.current.addListener('dragend', (event: any) => {
-        if (!isMountedRef.current) return
-        const lat = event.latLng.lat()
-        const lng = event.latLng.lng()
+      // Add idle event listener for fixed pin interaction
+      mapInstanceRef.current.addListener('idle', () => {
+        if (!isMountedRef.current || !mapInstanceRef.current) return
+        
+        const center = mapInstanceRef.current.getCenter()
+        const lat = center.lat()
+        const lng = center.lng()
+        
+        console.log('Map idle, center:', lat, lng)
         handleLocationChange(lat, lng)
       })
 
       setMapLoaded(true)
       console.log('Google Map initialized successfully')
+      
+      // Initial location name fetch
+      handleLocationChange(position[0], position[1])
     } catch (error) {
       console.error('Error initializing Google Map:', error)
     }
@@ -302,15 +275,10 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       console.log('LocationSelector cleanup')
       isMountedRef.current = false
       
-      // Destroy Google Maps instance first
+      // Clean up map instance
       if (mapInstanceRef.current) {
         try {
-          // Remove all listeners
           window.google?.maps?.event?.clearInstanceListeners?.(mapInstanceRef.current)
-          if (markerRef.current) {
-            window.google?.maps?.event?.clearInstanceListeners?.(markerRef.current)
-            markerRef.current.setMap(null)
-          }
         } catch (error) {
           console.log('Error clearing Google Maps listeners:', error)
         }
@@ -318,26 +286,14 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       
       // Clear references
       mapInstanceRef.current = null
-      markerRef.current = null
-      
-      // Remove the Google Maps div we created (not managed by React)
-      if (mapDivRef.current && mapDivRef.current.parentNode) {
-        try {
-          mapDivRef.current.parentNode.removeChild(mapDivRef.current)
-        } catch (error) {
-          console.log('Map div already removed')
-        }
-      }
-      mapDivRef.current = null
     }
   }, [])
 
   // Update map when position changes externally
   useEffect(() => {
-    if (mapInstanceRef.current && markerRef.current && selectedPosition && isMountedRef.current) {
+    if (mapInstanceRef.current && selectedPosition && isMountedRef.current) {
       const newPos = { lat: selectedPosition[0], lng: selectedPosition[1] }
       mapInstanceRef.current.setCenter(newPos)
-      markerRef.current.setPosition(newPos)
       setPosition(selectedPosition)
       handleLocationChange(selectedPosition[0], selectedPosition[1])
     }
@@ -360,17 +316,25 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
           Use Current Location
         </Button>
         <div className="flex-1 flex items-center justify-center text-sm text-gray-600">
-          <MapPin className="w-4 h-4 mr-2" />
-          Click or drag marker on map
+          <Target className="w-4 h-4 mr-2" />
+          Move map to select location
         </div>
       </div>
 
-      {/* Google Map container - React only manages the container, not the map */}
+      {/* Google Map container with fixed pin */}
       <div className="relative">
         <div 
           ref={mapContainerRef}
-          className="h-[50vh] min-h-[300px] w-full rounded-lg overflow-hidden border bg-gray-100 relative"
+          className="h-[50vh] min-h-[400px] w-full rounded-lg overflow-hidden border bg-gray-100 relative"
         >
+          {/* Fixed center pin */}
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+            <div className="relative">
+              <MapPin className="w-8 h-8 text-red-500 drop-shadow-lg" fill="currentColor" />
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+          
           {/* Loading overlay */}
           {!mapLoaded && (
             <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-20">

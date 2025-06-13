@@ -174,14 +174,14 @@ const CheckoutPage = () => {
 
     try {
       const orderData = {
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        delivery_latitude: deliveryLat,
-        delivery_longitude: deliveryLng,
-        delivery_location_name: deliveryLocationName,
-        delivery_type: selectedDeliveryOption,
-        customer_notes: customerNotes,
-        cart_items: items.map(item => ({
+        p_customer_name: customerName,
+        p_customer_phone: customerPhone,
+        p_delivery_lat: deliveryLat,
+        p_delivery_lon: deliveryLng,
+        p_delivery_location_name: deliveryLocationName,
+        p_delivery_type: selectedDeliveryOption,
+        p_customer_notes: customerNotes,
+        p_cart_items: items.map(item => ({
           product_id: item.product_id,
           quantity: item.quantity,
           price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, ''))
@@ -192,7 +192,7 @@ const CheckoutPage = () => {
 
       let result
       if (user) {
-        // Authenticated user
+        // Authenticated user - use create-authenticated-order
         result = await supabase.functions.invoke('create-authenticated-order', {
           body: orderData
         })
@@ -204,6 +204,7 @@ const CheckoutPage = () => {
       }
 
       if (result.error) {
+        console.error('Order placement error:', result.error)
         throw result.error
       }
 
@@ -235,6 +236,9 @@ const CheckoutPage = () => {
   const subtotal = getSubtotal()
   const total = subtotal + deliveryCharge
 
+  // Check if minimum order value is met
+  const isMinimumOrderMet = subtotal >= minimumOrderValue
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header showSearch={false} />
@@ -253,6 +257,16 @@ const CheckoutPage = () => {
             </Button>
             <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
           </div>
+
+          {/* Minimum order alert */}
+          {!isMinimumOrderMet && minimumOrderValue > 0 && (
+            <Alert className="border-yellow-200 bg-yellow-50">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                Minimum order value is ₹{minimumOrderValue.toFixed(2)}. Add ₹{(minimumOrderValue - subtotal).toFixed(2)} more to proceed.
+              </AlertDescription>
+            </Alert>
+          )}
 
           <div className="grid lg:grid-cols-2 gap-6">
             {/* Left Column - Forms */}
@@ -444,7 +458,7 @@ const CheckoutPage = () => {
               {/* Place Order Button */}
               <Button
                 onClick={handlePlaceOrder}
-                disabled={isPlacingOrder || !selectedDeliveryOption}
+                disabled={isPlacingOrder || !selectedDeliveryOption || !isMinimumOrderMet}
                 className="w-full"
                 style={{ backgroundColor: '#23b14d' }}
                 size="lg"

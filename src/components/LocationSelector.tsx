@@ -32,6 +32,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const markerRef = useRef<any>(null)
   const isMountedRef = useRef(true)
   const scriptLoadedRef = useRef(false)
+  const mapDivRef = useRef<HTMLDivElement | null>(null)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -160,15 +161,22 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     console.log('Initializing Google Map...')
 
     try {
-      // Create a dedicated div for Google Maps that React won't manage
+      // Create a completely isolated div for Google Maps
       const mapDiv = document.createElement('div')
       mapDiv.style.width = '100%'
       mapDiv.style.height = '100%'
-      mapDiv.id = `map-${Date.now()}`
+      mapDiv.style.position = 'absolute'
+      mapDiv.style.top = '0'
+      mapDiv.style.left = '0'
+      mapDiv.id = `google-map-${Date.now()}`
       
-      // Clear container and add our map div
-      mapContainerRef.current.innerHTML = ''
-      mapContainerRef.current.appendChild(mapDiv)
+      // Store reference to the map div
+      mapDivRef.current = mapDiv
+      
+      // Add to container
+      if (mapContainerRef.current) {
+        mapContainerRef.current.appendChild(mapDiv)
+      }
 
       const mapOptions = {
         center: { lat: position[0], lng: position[1] },
@@ -294,19 +302,33 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       console.log('LocationSelector cleanup')
       isMountedRef.current = false
       
-      // Clear references without touching DOM
+      // Destroy Google Maps instance first
+      if (mapInstanceRef.current) {
+        try {
+          // Remove all listeners
+          window.google?.maps?.event?.clearInstanceListeners?.(mapInstanceRef.current)
+          if (markerRef.current) {
+            window.google?.maps?.event?.clearInstanceListeners?.(markerRef.current)
+            markerRef.current.setMap(null)
+          }
+        } catch (error) {
+          console.log('Error clearing Google Maps listeners:', error)
+        }
+      }
+      
+      // Clear references
       mapInstanceRef.current = null
       markerRef.current = null
       
-      // Simply clear the container content without trying to remove specific nodes
-      if (mapContainerRef.current) {
+      // Remove the Google Maps div we created (not managed by React)
+      if (mapDivRef.current && mapDivRef.current.parentNode) {
         try {
-          mapContainerRef.current.innerHTML = ''
+          mapDivRef.current.parentNode.removeChild(mapDivRef.current)
         } catch (error) {
-          // Ignore cleanup errors
-          console.log('Cleanup completed')
+          console.log('Map div already removed')
         }
       }
+      mapDivRef.current = null
     }
   }, [])
 
@@ -343,11 +365,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         </div>
       </div>
 
-      {/* Google Map container with better isolation */}
+      {/* Google Map container - React only manages the container, not the map */}
       <div className="relative">
         <div 
           ref={mapContainerRef}
-          className="h-[50vh] min-h-[300px] w-full rounded-lg overflow-hidden border bg-gray-100"
+          className="h-[50vh] min-h-[300px] w-full rounded-lg overflow-hidden border bg-gray-100 relative"
         >
           {/* Loading overlay */}
           {!mapLoaded && (

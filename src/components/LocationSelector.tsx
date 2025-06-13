@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { MapPin, Navigation, Loader2 } from 'lucide-react'
@@ -285,16 +284,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       console.log('LocationSelector cleanup')
       isMountedRef.current = false
       
-      // Clean up map instance but don't remove script
+      // Simplified cleanup - just clear references, don't try to manipulate DOM
       if (mapInstanceRef.current) {
-        try {
-          // Remove event listeners
-          window.google?.maps?.event?.clearInstanceListeners?.(mapInstanceRef.current)
-          window.google?.maps?.event?.clearInstanceListeners?.(markerRef.current)
-        } catch (error) {
-          console.error('Error cleaning up map listeners:', error)
-        }
         mapInstanceRef.current = null
+      }
+      if (markerRef.current) {
         markerRef.current = null
       }
     }

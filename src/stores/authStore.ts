@@ -21,38 +21,31 @@ interface AuthState {
   initialize: () => Promise<void>
   updateProfile: (updates: Partial<Profile>) => Promise<void>
   refreshProfile: () => Promise<void>
-  checkSessionOnFocus: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
-  isLoading: false,
+  isLoading: true,
   isInitialized: false,
 
   signUp: async (email: string, password: string, fullName: string, phoneNumber: string) => {
     console.log('Auth store: Starting signup...')
-    set({ isLoading: true })
-    
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            phone_number: phoneNumber,
-          },
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          phone_number: phoneNumber,
         },
-      })
-      if (error) {
-        console.error('Auth store: Signup error:', error)
-        throw error
-      }
-      console.log('Auth store: Signup completed successfully')
-    } finally {
-      set({ isLoading: false })
+      },
+    })
+    if (error) {
+      console.error('Auth store: Signup error:', error)
+      throw error
     }
+    console.log('Auth store: Signup completed successfully')
   },
 
   signIn: async (email: string, password: string) => {
@@ -70,9 +63,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         throw error
       }
       
-      console.log('Auth store: Signin completed successfully')
+      console.log('Auth store: Signin completed successfully, session:', data.session)
       
-      // The onAuthStateChange listener will handle state updates
+      // Force profile refresh after successful login
+      if (data.session?.user) {
+        await get().refreshProfile()
+      }
       
     } catch (error) {
       console.error('Auth store: Signin failed:', error)
@@ -92,6 +88,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.error('Auth store: Signout error:', error)
         throw error
       }
+      set({ user: null, profile: null })
       console.log('Auth store: Signout completed successfully')
     } catch (error) {
       console.error('Auth store: Signout failed:', error)
@@ -115,41 +112,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       if (error) {
         console.error('Auth store: Profile refresh error:', error)
+        // Don't throw here, just log - profile might not exist yet
       } else {
         console.log('Auth store: Profile refreshed:', profile)
         set({ profile })
       }
     } catch (error) {
       console.error('Auth store: Profile refresh failed:', error)
-    }
-  },
-
-  checkSessionOnFocus: async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('Auth store: Session check error:', error)
-        set({ user: null, profile: null })
-        return
-      }
-      
-      if (!session) {
-        console.log('Auth store: No session found on focus check')
-        set({ user: null, profile: null })
-        return
-      }
-      
-      // Session is valid, refresh data if needed
-      const currentUser = get().user
-      if (!currentUser || currentUser.id !== session.user.id) {
-        set({ user: session.user })
-        await get().refreshProfile()
-      }
-      
-    } catch (error) {
-      console.error('Auth store: Focus check failed:', error)
-      set({ user: null, profile: null })
     }
   },
 
@@ -170,7 +139,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (session?.user) {
         console.log('Auth store: User found, setting state and fetching profile...')
         set({ user: session.user })
-        await get().refreshProfile()
+        
+        // Fetch profile
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+        
+        if (profileError) {
+          console.error('Auth store: Profile fetch error:', profileError)
+        } else {
+          console.log('Auth store: Profile fetched successfully:', profile)
+          set({ profile })
+        }
       } else {
         console.log('Auth store: No active session')
         set({ user: null, profile: null })
@@ -190,7 +172,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('Auth store: User signed in, updating state')
         set({ user: session.user, isLoading: false })
-        await get().refreshProfile()
+        
+        // Fetch profile for signed in user
+        try {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single()
+          
+          if (error) {
+            console.error('Auth store: Profile fetch error on signin:', error)
+          } else {
+            console.log('Auth store: Profile fetched on signin:', profile)
+            set({ profile })
+          }
+        } catch (error) {
+          console.error('Auth store: Profile fetch failed on signin:', error)
+        }
       } else if (event === 'SIGNED_OUT') {
         console.log('Auth store: User signed out, clearing state')
         set({ user: null, profile: null, isLoading: false })
@@ -199,17 +198,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: session.user })
       }
     })
-
-    // Set up focus event listener for session checks
-    const handleFocus = () => {
-      console.log('App gained focus, checking session...')
-      get().checkSessionOnFocus()
-    }
-
-    window.addEventListener('focus', handleFocus)
-    
-    // Note: In a real app, you'd want to clean this up when the store is destroyed
-    // For now, we'll leave it as the store persists for the app lifetime
   },
 
   updateProfile: async (updates: Partial<Profile>) => {

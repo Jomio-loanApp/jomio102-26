@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { MapPin, Navigation, Loader2, Target } from 'lucide-react'
+import { MapPin, Navigation, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface LocationSelectorProps {
@@ -10,30 +10,16 @@ interface LocationSelectorProps {
   selectedPosition?: [number, number]
 }
 
-declare global {
-  interface Window {
-    google: any
-    initMap: () => void
-    googleMapsLoaded: boolean
-  }
-}
-
 const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition }: LocationSelectorProps) => {
   const [position, setPosition] = useState<[number, number]>(
-    selectedPosition || initialPosition || [25.9716, 85.5946] // Darbhanga coordinates
+    selectedPosition || initialPosition || [12.9716, 77.5946]
   )
   const [isLocating, setIsLocating] = useState(false)
   const [locationName, setLocationName] = useState('')
   const [manualAddress, setManualAddress] = useState('')
   const [isGettingLocationName, setIsGettingLocationName] = useState(false)
-  const [mapLoaded, setMapLoaded] = useState(false)
-  
-  // Use a single ref for the outer container that React manages
-  const mapWrapperRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<any>(null)
   const mapInstanceRef = useRef<any>(null)
-  const isMountedRef = useRef(true)
-  const scriptLoadedRef = useRef(false)
-  const mapContainerElementRef = useRef<HTMLDivElement | null>(null)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -58,11 +44,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     } catch (error) {
       console.error('Error getting location name from Edge Function:', error)
       
-      // Fallback to Google Geocoding if available
+      // Fallback to direct geocoding if available
       if (window.google?.maps?.Geocoder) {
         return new Promise<string>((resolve) => {
-          const geocoder = new window.google.maps.Geocoder()
-          geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
+          const geocoder = new google.maps.Geocoder()
+          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
             if (status === 'OK' && results && results[0]) {
               resolve(results[0].formatted_address)
             } else {
@@ -79,25 +65,19 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   }
 
   const handleLocationChange = async (lat: number, lng: number) => {
-    if (!isMountedRef.current) return
-    
     try {
       console.log('Location changed to:', lat, lng)
       setPosition([lat, lng])
       
       const name = await getLocationName(lat, lng)
-      if (isMountedRef.current) {
-        setLocationName(name)
-        onLocationSelect(lat, lng, name)
-      }
+      setLocationName(name)
+      onLocationSelect(lat, lng, name)
       
     } catch (error) {
       console.error('Error handling location change:', error)
-      if (isMountedRef.current) {
-        const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
-        setLocationName(fallbackName)
-        onLocationSelect(lat, lng, fallbackName)
-      }
+      const fallbackName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      setLocationName(fallbackName)
+      onLocationSelect(lat, lng, fallbackName)
     }
   }
 
@@ -106,26 +86,15 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          if (!isMountedRef.current) return
-          
           const { latitude, longitude } = position.coords
           console.log('Got current location:', latitude, longitude)
           handleLocationChange(latitude, longitude)
-          
-          // Update map if loaded
-          if (mapInstanceRef.current) {
-            const newPos = { lat: latitude, lng: longitude }
-            mapInstanceRef.current.setCenter(newPos)
-          }
-          
           setIsLocating(false)
         },
         (error) => {
           console.error('Error getting current location:', error)
-          if (isMountedRef.current) {
-            setIsLocating(false)
-            alert('Unable to get your current location. Please select on the map.')
-          }
+          setIsLocating(false)
+          alert('Unable to get your current location. Please enter your address manually.')
         },
         {
           enableHighAccuracy: true,
@@ -147,186 +116,62 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     }
   }
 
-  const createMapContainer = () => {
-    if (!mapWrapperRef.current || mapContainerElementRef.current) return null
-
-    // Create a new div element that Google Maps will manage
-    const mapDiv = document.createElement('div')
-    mapDiv.style.width = '100%'
-    mapDiv.style.height = '100%'
-    mapDiv.style.minHeight = '400px'
-    
-    // Store reference and append to wrapper
-    mapContainerElementRef.current = mapDiv
-    mapWrapperRef.current.appendChild(mapDiv)
-    
-    return mapDiv
-  }
-
-  const initializeGoogleMap = () => {
-    if (!window.google?.maps || !isMountedRef.current || mapInstanceRef.current) {
-      console.log('Cannot initialize map:', {
-        hasGoogle: !!window.google?.maps,
-        isMounted: isMountedRef.current,
-        hasMapInstance: !!mapInstanceRef.current
-      })
-      return
-    }
-
-    console.log('Initializing Google Map...')
-
-    try {
-      const mapContainer = createMapContainer()
-      if (!mapContainer) {
-        console.error('Failed to create map container')
-        return
-      }
-
-      const mapOptions = {
-        center: { lat: position[0], lng: position[1] },
-        zoom: 15,
-        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-        zoomControl: true,
-        mapTypeControl: false,
-        scaleControl: true,
-        streetViewControl: false,
-        rotateControl: false,
-        fullscreenControl: true,
-        disableDefaultUI: false
-      }
-
-      mapInstanceRef.current = new window.google.maps.Map(mapContainer, mapOptions)
-
-      // Add idle event listener for fixed pin interaction
-      mapInstanceRef.current.addListener('idle', () => {
-        if (!isMountedRef.current || !mapInstanceRef.current) return
-        
-        const center = mapInstanceRef.current.getCenter()
-        const lat = center.lat()
-        const lng = center.lng()
-        
-        console.log('Map idle, center:', lat, lng)
-        handleLocationChange(lat, lng)
-      })
-
-      setMapLoaded(true)
-      console.log('Google Map initialized successfully')
-      
-      // Initial location name fetch
-      handleLocationChange(position[0], position[1])
-    } catch (error) {
-      console.error('Error initializing Google Map:', error)
-    }
-  }
-
-  const loadGoogleMapsScript = () => {
-    // Prevent multiple script loads
-    if (window.googleMapsLoaded || scriptLoadedRef.current) {
-      console.log('Google Maps already loaded or loading')
-      if (window.google?.maps) {
-        setTimeout(initializeGoogleMap, 100)
-      }
-      return
-    }
-
-    // Check if script already exists
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
-    if (existingScript) {
-      console.log('Google Maps script already exists in DOM')
-      scriptLoadedRef.current = true
-      
-      // Wait for it to load
-      const checkInterval = setInterval(() => {
-        if (window.google?.maps && isMountedRef.current) {
-          clearInterval(checkInterval)
-          window.googleMapsLoaded = true
-          setTimeout(initializeGoogleMap, 100)
-        }
-      }, 100)
-      
-      // Clear interval after 10 seconds to prevent infinite checking
-      setTimeout(() => clearInterval(checkInterval), 10000)
-      return
-    }
-
-    console.log('Loading Google Maps script...')
-    scriptLoadedRef.current = true
-
-    // Create callback function
-    window.initMap = () => {
-      console.log('Google Maps API loaded via callback')
-      if (isMountedRef.current) {
-        window.googleMapsLoaded = true
-        setTimeout(initializeGoogleMap, 100)
-      }
-    }
-
-    // Create and load script
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBgvl_eqV5JeJBP35Rg6fMT1lXHkBgN0vI&libraries=places&callback=initMap`
-    script.async = true
-    script.defer = true
-
-    script.onerror = () => {
-      console.error('Failed to load Google Maps script')
-      scriptLoadedRef.current = false
-    }
-
-    document.head.appendChild(script)
-  }
-
+  // Initialize simple map when component mounts
   useEffect(() => {
-    isMountedRef.current = true
-    
-    // Check if Google Maps is already available
-    if (window.google?.maps) {
-      console.log('Google Maps already available')
-      setTimeout(initializeGoogleMap, 100)
-    } else {
-      loadGoogleMapsScript()
-    }
-    
-    return () => {
-      console.log('LocationSelector cleanup')
-      isMountedRef.current = false
-      
-      // Clean up map instance without touching DOM directly
-      if (mapInstanceRef.current) {
-        try {
-          window.google?.maps?.event?.clearInstanceListeners?.(mapInstanceRef.current)
-          mapInstanceRef.current = null
-        } catch (error) {
-          console.log('Error clearing Google Maps listeners:', error)
+    const initializeMap = async () => {
+      try {
+        const L = await import('leaflet')
+        await import('leaflet/dist/leaflet.css')
+
+        delete (L.Icon.Default.prototype as any)._getIconUrl
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+          iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+        })
+
+        if (mapRef.current && !mapInstanceRef.current) {
+          mapInstanceRef.current = L.map(mapRef.current).setView(position, 15)
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          }).addTo(mapInstanceRef.current)
+
+          const marker = L.marker(position).addTo(mapInstanceRef.current)
+
+          mapInstanceRef.current.on('click', (e: any) => {
+            const { lat, lng } = e.latlng
+            marker.setLatLng([lat, lng])
+            handleLocationChange(lat, lng)
+          })
         }
+      } catch (error) {
+        console.error('Error initializing map:', error)
       }
-      
-      // Clean up the map container element if it exists
-      if (mapContainerElementRef.current && mapWrapperRef.current) {
-        try {
-          if (mapContainerElementRef.current.parentNode === mapWrapperRef.current) {
-            mapWrapperRef.current.removeChild(mapContainerElementRef.current)
-          }
-        } catch (error) {
-          console.log('Map container already removed:', error)
-        }
-        mapContainerElementRef.current = null
+    }
+
+    initializeMap()
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
       }
     }
   }, [])
 
   // Update map when position changes externally
   useEffect(() => {
-    if (mapInstanceRef.current && selectedPosition && isMountedRef.current) {
-      const newPos = { lat: selectedPosition[0], lng: selectedPosition[1] }
-      mapInstanceRef.current.setCenter(newPos)
+    if (mapInstanceRef.current && selectedPosition) {
       setPosition(selectedPosition)
+      mapInstanceRef.current.setView(selectedPosition, 15)
       handleLocationChange(selectedPosition[0], selectedPosition[1])
     }
   }, [selectedPosition])
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+      <div className="flex space-x-3">
         <Button
           onClick={getCurrentLocation}
           disabled={isLocating}
@@ -340,46 +185,36 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
           )}
           Use Current Location
         </Button>
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-600">
-          <Target className="w-4 h-4 mr-2" />
-          Move map to select location
+        <div className="flex-1 flex items-center text-sm text-gray-600">
+          <MapPin className="w-4 h-4 mr-2" />
+          Or click on the map below
         </div>
       </div>
 
-      {/* Google Map container with fixed pin */}
-      <div className="relative">
-        <div 
-          ref={mapWrapperRef}
-          className="h-[50vh] min-h-[400px] w-full rounded-lg overflow-hidden border bg-gray-100 relative"
-        >
-          {/* Fixed center pin */}
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-            <div className="relative">
-              <MapPin className="w-8 h-8 text-red-500 drop-shadow-lg" fill="currentColor" />
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-            </div>
-          </div>
-          
-          {/* Loading overlay */}
-          {!mapLoaded && (
-            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-20">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-gray-400" />
-                <p className="text-sm text-gray-600">Loading map...</p>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Location name loading overlay */}
+      {/* Map container */}
+      <div 
+        ref={mapRef}
+        className="h-64 md:h-80 rounded-lg overflow-hidden border bg-gray-100 relative"
+        style={{ minHeight: '256px' }}
+      >
+        {/* Loading overlay */}
         {isGettingLocationName && (
-          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center z-30 rounded-lg">
+          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
             <div className="bg-white p-3 rounded-lg flex items-center space-x-2">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span className="text-sm">Getting location...</span>
             </div>
           </div>
         )}
+        
+        {/* Fallback content while map loads */}
+        <div className="h-full flex items-center justify-center text-center text-gray-500">
+          <div>
+            <MapPin className="w-12 h-12 mx-auto mb-2" />
+            <p className="text-sm">Loading interactive map...</p>
+            <p className="text-xs">Click anywhere on the map to select location</p>
+          </div>
+        </div>
       </div>
 
       {locationName && (

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { MapPin, Navigation, Loader2 } from 'lucide-react'
@@ -28,7 +27,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const [isGettingLocationName, setIsGettingLocationName] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [scriptsLoaded, setScriptsLoaded] = useState(false)
-  const mapRef = useRef<HTMLDivElement>(null)
+  const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
   const isMountedRef = useRef(true)
@@ -148,10 +147,10 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   }
 
   const initializeGoogleMap = () => {
-    if (!window.google?.maps || !mapRef.current || mapInstanceRef.current || !isMountedRef.current) {
+    if (!window.google?.maps || !mapContainerRef.current || mapInstanceRef.current || !isMountedRef.current) {
       console.log('Cannot initialize map:', {
         hasGoogle: !!window.google?.maps,
-        hasMapRef: !!mapRef.current,
+        hasMapRef: !!mapContainerRef.current,
         hasMapInstance: !!mapInstanceRef.current,
         isMounted: isMountedRef.current
       })
@@ -161,10 +160,15 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     console.log('Initializing Google Map...')
 
     try {
-      // Clear any existing content in the map container
-      if (mapRef.current) {
-        mapRef.current.innerHTML = ''
-      }
+      // Create a dedicated div for Google Maps that React won't manage
+      const mapDiv = document.createElement('div')
+      mapDiv.style.width = '100%'
+      mapDiv.style.height = '100%'
+      mapDiv.id = `map-${Date.now()}`
+      
+      // Clear container and add our map div
+      mapContainerRef.current.innerHTML = ''
+      mapContainerRef.current.appendChild(mapDiv)
 
       const mapOptions = {
         center: { lat: position[0], lng: position[1] },
@@ -178,7 +182,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         fullscreenControl: true
       }
 
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, mapOptions)
+      mapInstanceRef.current = new window.google.maps.Map(mapDiv, mapOptions)
 
       // Add marker
       markerRef.current = new window.google.maps.Marker({
@@ -294,14 +298,14 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       mapInstanceRef.current = null
       markerRef.current = null
       
-      // Clear the map container content to prevent React from trying to manage Google Maps DOM
-      if (mapRef.current) {
-        // Use setTimeout to ensure this runs after React's cleanup
-        setTimeout(() => {
-          if (mapRef.current) {
-            mapRef.current.innerHTML = ''
-          }
-        }, 0)
+      // Simply clear the container content without trying to remove specific nodes
+      if (mapContainerRef.current) {
+        try {
+          mapContainerRef.current.innerHTML = ''
+        } catch (error) {
+          // Ignore cleanup errors
+          console.log('Cleanup completed')
+        }
       }
     }
   }, [])
@@ -339,12 +343,11 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         </div>
       </div>
 
-      {/* Google Map container with explicit height */}
+      {/* Google Map container with better isolation */}
       <div className="relative">
         <div 
-          ref={mapRef}
-          className="h-[50vh] min-h-[300px] w-full rounded-lg overflow-hidden border bg-gray-100 z-10"
-          style={{ isolation: 'isolate' }}
+          ref={mapContainerRef}
+          className="h-[50vh] min-h-[300px] w-full rounded-lg overflow-hidden border bg-gray-100"
         >
           {/* Loading overlay */}
           {!mapLoaded && (

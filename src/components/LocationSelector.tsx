@@ -27,12 +27,13 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
   const [manualAddress, setManualAddress] = useState('')
   const [isGettingLocationName, setIsGettingLocationName] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [scriptsLoaded, setScriptsLoaded] = useState(false)
   
-  const mapContainerRef = useRef<HTMLDivElement>(null)
+  // Use a single ref for the outer container that React manages
+  const mapWrapperRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const isMountedRef = useRef(true)
   const scriptLoadedRef = useRef(false)
+  const mapContainerElementRef = useRef<HTMLDivElement | null>(null)
 
   const getLocationName = async (lat: number, lng: number) => {
     setIsGettingLocationName(true)
@@ -146,13 +147,28 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     }
   }
 
+  const createMapContainer = () => {
+    if (!mapWrapperRef.current || mapContainerElementRef.current) return null
+
+    // Create a new div element that Google Maps will manage
+    const mapDiv = document.createElement('div')
+    mapDiv.style.width = '100%'
+    mapDiv.style.height = '100%'
+    mapDiv.style.minHeight = '400px'
+    
+    // Store reference and append to wrapper
+    mapContainerElementRef.current = mapDiv
+    mapWrapperRef.current.appendChild(mapDiv)
+    
+    return mapDiv
+  }
+
   const initializeGoogleMap = () => {
-    if (!window.google?.maps || !mapContainerRef.current || mapInstanceRef.current || !isMountedRef.current) {
+    if (!window.google?.maps || !isMountedRef.current || mapInstanceRef.current) {
       console.log('Cannot initialize map:', {
         hasGoogle: !!window.google?.maps,
-        hasMapRef: !!mapContainerRef.current,
-        hasMapInstance: !!mapInstanceRef.current,
-        isMounted: isMountedRef.current
+        isMounted: isMountedRef.current,
+        hasMapInstance: !!mapInstanceRef.current
       })
       return
     }
@@ -160,6 +176,12 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     console.log('Initializing Google Map...')
 
     try {
+      const mapContainer = createMapContainer()
+      if (!mapContainer) {
+        console.error('Failed to create map container')
+        return
+      }
+
       const mapOptions = {
         center: { lat: position[0], lng: position[1] },
         zoom: 15,
@@ -173,7 +195,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         disableDefaultUI: false
       }
 
-      mapInstanceRef.current = new window.google.maps.Map(mapContainerRef.current, mapOptions)
+      mapInstanceRef.current = new window.google.maps.Map(mapContainer, mapOptions)
 
       // Add idle event listener for fixed pin interaction
       mapInstanceRef.current.addListener('idle', () => {
@@ -202,7 +224,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     if (window.googleMapsLoaded || scriptLoadedRef.current) {
       console.log('Google Maps already loaded or loading')
       if (window.google?.maps) {
-        setScriptsLoaded(true)
         setTimeout(initializeGoogleMap, 100)
       }
       return
@@ -219,7 +240,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
         if (window.google?.maps && isMountedRef.current) {
           clearInterval(checkInterval)
           window.googleMapsLoaded = true
-          setScriptsLoaded(true)
           setTimeout(initializeGoogleMap, 100)
         }
       }, 100)
@@ -237,7 +257,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       console.log('Google Maps API loaded via callback')
       if (isMountedRef.current) {
         window.googleMapsLoaded = true
-        setScriptsLoaded(true)
         setTimeout(initializeGoogleMap, 100)
       }
     }
@@ -251,9 +270,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     script.onerror = () => {
       console.error('Failed to load Google Maps script')
       scriptLoadedRef.current = false
-      if (isMountedRef.current) {
-        setScriptsLoaded(false)
-      }
     }
 
     document.head.appendChild(script)
@@ -265,7 +281,6 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
     // Check if Google Maps is already available
     if (window.google?.maps) {
       console.log('Google Maps already available')
-      setScriptsLoaded(true)
       setTimeout(initializeGoogleMap, 100)
     } else {
       loadGoogleMapsScript()
@@ -275,17 +290,27 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       console.log('LocationSelector cleanup')
       isMountedRef.current = false
       
-      // Clean up map instance
+      // Clean up map instance without touching DOM directly
       if (mapInstanceRef.current) {
         try {
           window.google?.maps?.event?.clearInstanceListeners?.(mapInstanceRef.current)
+          mapInstanceRef.current = null
         } catch (error) {
           console.log('Error clearing Google Maps listeners:', error)
         }
       }
       
-      // Clear references
-      mapInstanceRef.current = null
+      // Clean up the map container element if it exists
+      if (mapContainerElementRef.current && mapWrapperRef.current) {
+        try {
+          if (mapContainerElementRef.current.parentNode === mapWrapperRef.current) {
+            mapWrapperRef.current.removeChild(mapContainerElementRef.current)
+          }
+        } catch (error) {
+          console.log('Map container already removed:', error)
+        }
+        mapContainerElementRef.current = null
+      }
     }
   }, [])
 
@@ -324,7 +349,7 @@ const LocationSelector = ({ onLocationSelect, initialPosition, selectedPosition 
       {/* Google Map container with fixed pin */}
       <div className="relative">
         <div 
-          ref={mapContainerRef}
+          ref={mapWrapperRef}
           className="h-[50vh] min-h-[400px] w-full rounded-lg overflow-hidden border bg-gray-100 relative"
         >
           {/* Fixed center pin */}

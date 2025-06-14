@@ -71,6 +71,7 @@ const DeliveryLocationPage = () => {
   const autocompleteElementRef = useRef<google.maps.places.PlaceAutocompleteElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const centerChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [mapNeverAppeared, setMapNeverAppeared] = useState(false);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -130,9 +131,21 @@ const DeliveryLocationPage = () => {
   }
 
   const handleMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map
-    setIsLoadingMap(false)
-    
+    mapRef.current = map;
+    setIsLoadingMap(false);
+
+    // Check if the map container is displayed and has non-zero size after 2s
+    setTimeout(() => {
+      const mapNode = document.querySelector('.gm-style') as HTMLElement | null;
+      if (!mapNode || mapNode.offsetHeight < 50 || mapNode.offsetWidth < 50) {
+        setMapNeverAppeared(true);
+        console.error("Google Map element failed to display (zero size or missing). Check API key, CSS, network, and script blocking settings.");
+      } else {
+        setMapNeverAppeared(false);
+        console.log("Google Map visible and rendered on screen.");
+      }
+    }, 2000);
+
     if (searchInputRef.current && window.google?.maps?.places?.PlaceAutocompleteElement) {
       try {
         autocompleteElementRef.current = new google.maps.places.PlaceAutocompleteElement({
@@ -388,6 +401,33 @@ const DeliveryLocationPage = () => {
             - Billing is enabled on Google Cloud<br />
             - API key matches what is expected<br />
             - No browser extension is blocking map<br />
+          </div>
+        </div>
+      )}
+
+      {/* Show overlay if Google Map element never appears */}
+      {mapNeverAppeared && (
+        <div className="absolute inset-0 z-[999] flex flex-col items-center justify-center bg-white/90 text-center px-8">
+          <div className="text-2xl font-bold text-red-700 mb-3">Map failed to load visually</div>
+          <div className="text-gray-700 mb-2">
+            The Google Maps script loaded, but the map is not appearing.<br/>
+            This is usually due to one of:
+            <ul className="list-disc text-left ml-4 my-2 text-base">
+              <li>API restrictions blocking frontend access (check allowed referrers in Google Cloud).</li>
+              <li>Maps JavaScript API or Places API is not enabled in Cloud Console.</li>
+              <li>Billing problem with Google Cloud account.</li>
+              <li>A browser extension is blocking Google Maps.</li>
+              <li>Network issue, VPN, or ad blocker blocking maps.</li>
+            </ul>
+            <div className="mt-2">
+              <strong>If this persists:</strong>
+              <ul className="list-disc text-left ml-4 mt-1">
+                <li>Open Console and Network panels in DevTools,<br/>
+                  look for red error messages or failed requests to <code>maps.googleapis.com</code></li>
+                <li>Try incognito window and disabling extensions.</li>
+                <li>Check your <span className="font-mono">GOOGLE_MAPS_API_KEY</span> matches your Google Cloud Console and site domain is allowed.</li>
+              </ul>
+            </div>
           </div>
         </div>
       )}

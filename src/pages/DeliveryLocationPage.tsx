@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -61,6 +60,7 @@ const DeliveryLocationPage = () => {
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
   const [showLocationBanner, setShowLocationBanner] = useState(!hasLocationPermission)
   const [locationError, setLocationError] = useState('')
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null)
   
   // Address management states
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
@@ -340,7 +340,22 @@ const DeliveryLocationPage = () => {
     }
   }
 
+  // Add a debug log to print the actual API key being used for maps
   const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q'
+  // Debug key log (only do this in development)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Google Maps API Key used:', GOOGLE_MAPS_API_KEY)
+  }
+
+  // Handler for map loading errors
+  const handleMapError = (error: any) => {
+    console.error("Google Maps error:", error)
+    setMapLoadError(
+      typeof error === 'string'
+        ? error
+        : (error?.message || "Failed to load Google Maps. Please check your API key and network connection.")
+    )
+  }
 
   return (
     <div className="min-h-screen bg-white relative flex flex-col">
@@ -361,7 +376,23 @@ const DeliveryLocationPage = () => {
         </div>
       </div>
 
-      {/* Address Selection or Map View */}
+      {/* Show error banner if map failed to load */}
+      {mapLoadError && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative m-4 z-50">
+          <strong className="font-bold">Map Load Error: </strong> 
+          <span className="block sm:inline">{mapLoadError}</span>
+          <div className="mt-2 text-xs text-red-800">
+            Make sure:<br />
+            - API Key is correct and not restricted<br />
+            - <strong>Maps JavaScript API</strong> and <strong>Places API</strong> are enabled<br />
+            - Billing is enabled on Google Cloud<br />
+            - API key matches what is expected<br />
+            - No browser extension is blocking map<br />
+          </div>
+        </div>
+      )}
+
+      {/* rest of delivery location logic */}
       {showAddressSelection && user ? (
         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
           {isLoadingAddresses ? (
@@ -490,6 +521,11 @@ const DeliveryLocationPage = () => {
                   </div>
                 </div>
               }
+              onError={handleMapError}
+              onLoad={() => {
+                setMapLoadError(null)
+                console.log('Google Map script loaded successfully')
+              }}
             >
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}

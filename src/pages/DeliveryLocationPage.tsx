@@ -1,10 +1,11 @@
-
 import { useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loader2, MapPin, Navigation, ArrowLeft } from 'lucide-react'
-import { LoadScript, GoogleMap } from '@react-google-maps/api'
+import { LoadScript, GoogleMap, StandaloneSearchBox } from '@react-google-maps/api'
+import CrosshairIcon from '@/components/CrosshairIcon'
+import { useLocationStore } from '@/stores/locationStore'
 
 // Basic default values
 const defaultCenter = { lat: 12.9716, lng: 77.5946 }
@@ -19,6 +20,11 @@ const DeliveryLocationPage = () => {
   const [isLoadingMap, setIsLoadingMap] = useState(true)
   const [mapError, setMapError] = useState<string | null>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
+  const [searchBox, setSearchBox] = useState<google.maps.places.SearchBox | null>(null)
+  const [searchText, setSearchText] = useState('')
+  const [address, setAddress] = useState('')
+  const [isLoadingPlace, setIsLoadingPlace] = useState(false)
+  const { setDeliveryLocation } = useLocationStore()
 
   // Called when user clicks use current location
   const getCurrentLocation = () => {
@@ -54,9 +60,44 @@ const DeliveryLocationPage = () => {
     )
   }
 
-  // Confirm action (stub for the confirm button)
+  // Get address from coordinates
+  const getAddress = useCallback(async (lat: number, lng: number) => {
+    setIsLoadingPlace(true)
+    try {
+      const resp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`)
+      const data = await resp.json()
+      if (data?.results?.[0]?.formatted_address) {
+        setAddress(data.results[0].formatted_address)
+      } else {
+        setAddress("Unnamed location")
+      }
+    } catch(e) {
+      setAddress("Failed to fetch address")
+    }
+    setIsLoadingPlace(false)
+  }, [])
+
+  // Update address when center changes
+  React.useEffect(() => {
+    getAddress(center.lat, center.lng)
+  }, [center.lat, center.lng, getAddress])
+
+  // Search box handlers
+  const onSearchBoxLoad = (sb: google.maps.places.SearchBox) => setSearchBox(sb)
+  
+  const onPlacesChanged = () => {
+    const places = searchBox?.getPlaces?.()
+    if (places && places.length > 0 && places[0].geometry?.location) {
+      const loc = places[0].geometry.location
+      setCenter({ lat: loc.lat(), lng: loc.lng() })
+      setSearchText(places[0].formatted_address || "")
+    }
+  }
+
+  // Confirm action
   const handleConfirm = () => {
-    alert("Confirm Location: " + JSON.stringify(center))
+    setDeliveryLocation(center.lat, center.lng, address)
+    navigate("/checkout")
   }
 
   return (
@@ -76,7 +117,22 @@ const DeliveryLocationPage = () => {
 
       {/* Search Bar */}
       <div className="px-4 py-3 bg-white border-b">
-        <Input placeholder="Search location (not implemented)" disabled className="bg-gray-100" />
+        <LoadScript
+          googleMapsApiKey={GOOGLE_MAPS_API_KEY}
+          libraries={["places"]}
+        >
+          <StandaloneSearchBox
+            onLoad={onSearchBoxLoad}
+            onPlacesChanged={onPlacesChanged}
+          >
+            <Input 
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Search for a location" 
+              className="bg-gray-100" 
+            />
+          </StandaloneSearchBox>
+        </LoadScript>
       </div>
 
       {/* Use current location button  */}
@@ -118,20 +174,42 @@ const DeliveryLocationPage = () => {
             googleMapsApiKey={GOOGLE_MAPS_API_KEY}
             onLoad={() => setMapError(null)}
             onError={handleMapError}
+            libraries={["places"]}
           >
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={center}
-              zoom={15}
-              onLoad={handleMapLoad}
-              onUnmount={() => { mapRef.current = null }}
-              options={{
-                disableDefaultUI: false,
-                streetViewControl: false,
-                fullscreenControl: false
-              }}
-            />
+            <div className="relative w-full">
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={center}
+                zoom={15}
+                onLoad={handleMapLoad}
+                onUnmount={() => { mapRef.current = null }}
+                options={{
+                  disableDefaultUI: false,
+                  streetViewControl: false,
+                  fullscreenControl: false
+                }}
+                onDragEnd={() => {
+                  if (mapRef.current) {
+                    const c = mapRef.current.getCenter()
+                    if (c) {
+                      setCenter({ lat: c.lat(), lng: c.lng() })
+                    }
+                  }
+                }}
+              />
+              {/* Centered pin overlay */}
+              <CrosshairIcon className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full text-green-600 w-12 h-12 shadow-lg drop-shadow-xl z-10" />
+            </div>
           </LoadScript>
+        )}
+        
+        {/* Selected location info */}
+        {!isLoadingMap && !mapError && (
+          <div className="w-full mt-3">
+            <div className="text-xs text-gray-500 mb-1">Location selected:</div>
+            <div className="font-medium text-gray-800 mb-0.5">{isLoadingPlace ? "Fetching address..." : address}</div>
+            <div className="text-xs text-gray-400">{center.lat.toFixed(6)}, {center.lng.toFixed(6)}</div>
+          </div>
         )}
       </div>
 

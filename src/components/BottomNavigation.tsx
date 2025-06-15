@@ -20,15 +20,13 @@ const BottomNavigation = () => {
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY
-      
+
       if (currentScrollY > lastScrollY && currentScrollY > 100) {
-        // Scrolling down
         setIsVisible(false)
       } else {
-        // Scrolling up
         setIsVisible(true)
       }
-      
+
       setLastScrollY(currentScrollY)
     }
 
@@ -47,7 +45,7 @@ const BottomNavigation = () => {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home, path: '/', onClick: () => navigate('/') },
     { id: 'wishlist', label: 'Wishlist', icon: Heart, path: '/wishlist', onClick: () => navigate('/wishlist') },
-    { id: 'cart', label: 'Cart', icon: ShoppingCart, path: '/cart', badge: cartItemCount, onClick: () => navigate('/cart') },
+    { id: 'cart', label: 'Cart', icon: ShoppingCart, path: '/cart', badge: cartItemCount > 0 ? cartItemCount : null, onClick: () => navigate('/cart') },
     { 
       id: 'profile', 
       label: user ? 'Profile' : 'Login', 
@@ -62,7 +60,7 @@ const BottomNavigation = () => {
       <div className={`fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-40 md:hidden shadow-lg transition-transform duration-300 ${
         isVisible ? 'translate-y-0' : 'translate-y-full'
       }`}>
-        <div className="flex justify-around items-center py-1">
+        <div className="flex justify-around items-center py-2" style={{ minHeight: '65px' }}>
           {navItems.map((item) => {
             const isActive = location.pathname === item.path
             const Icon = item.icon
@@ -84,7 +82,7 @@ const BottomNavigation = () => {
                     <Icon className="w-5 h-5" />
                   </div>
                   {/* Only render badge if there are items in the cart */}
-                  {item.badge && item.badge > 0 && (
+                  {item.id === "cart" && item.badge && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 min-w-4 flex items-center justify-center shadow-sm animate-pulse">
                       {item.badge > 99 ? '99+' : item.badge}
                     </span>

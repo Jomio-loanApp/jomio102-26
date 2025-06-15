@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -37,8 +36,8 @@ interface Order {
 const OrderHistoryPage = () => {
   const { user } = useAuthStore()
   const navigate = useNavigate()
-  
-  const [orders, setOrders] = useState<Order[]>([])
+
+  const [orders, setOrders] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
   const [page, setPage] = useState(1)
@@ -50,83 +49,35 @@ const OrderHistoryPage = () => {
       navigate('/')
       return
     }
-    
     fetchOrders(1)
   }, [user, navigate])
 
   const fetchOrders = async (pageNum: number) => {
     if (!user) return
-    
+
     try {
       setIsLoading(true)
       const start = (pageNum - 1) * itemsPerPage
       const end = start + itemsPerPage - 1
-      
-      console.log(`OrderHistoryPage: Fetching orders page ${pageNum} (${start}-${end})`)
-      
+
+      // fetch orders that belong to this user (customer_profile_id = user.id)
       const { data, error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items!inner (
-            id,
-            product_id,
-            quantity,
-            price_at_purchase,
-            product_name_at_purchase,
-            product_image_at_purchase
-          )
-        `)
+        .select(`*, order_items:order_items (
+            id, product_id, quantity, price_at_purchase, product_name_at_purchase, product_image_at_purchase
+         )`)
         .eq('customer_profile_id', user.id)
         .order('ordered_at', { ascending: false })
         .range(start, end)
 
-      if (error) {
-        console.error('OrderHistoryPage: Error fetching orders:', error)
-        throw error
-      }
-      
-      console.log('OrderHistoryPage: Orders fetched:', data)
-      
-      // Group order items by order ID
-      const ordersMap = new Map<string, Order>()
-      
-      data?.forEach((row) => {
-        const orderId = row.id
-        
-        if (!ordersMap.has(orderId)) {
-          const { order_items, ...orderData } = row
-          ordersMap.set(orderId, {
-            ...orderData,
-            order_items: []
-          })
-        }
-        
-        const orderItem = row.order_items
-        if (orderItem) {
-          const order = ordersMap.get(orderId)!
-          order.order_items = [...(order.order_items || []), orderItem]
-        }
-      })
-      
-      const ordersList = Array.from(ordersMap.values())
+      if (error) throw error
 
-      if (pageNum === 1) {
-        setOrders(ordersList)
-      } else {
-        setOrders(prev => [...prev, ...ordersList])
-      }
-      
-      setHasMore(ordersList.length === itemsPerPage)
+      setOrders(pageNum === 1 ? (data || []) : prev => [...prev, ...(data || [])])
+      setHasMore(data && data.length === itemsPerPage)
       setPage(pageNum)
-      
     } catch (error) {
-      console.error('Error fetching orders:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load your order history",
-        variant: "destructive",
-      })
+      setOrders([])
+      setHasMore(false)
     } finally {
       setIsLoading(false)
     }

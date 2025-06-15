@@ -172,8 +172,6 @@ const CheckoutPage = () => {
     setIsPlacingOrder(true)
 
     try {
-      // STRUCTURE THE ORDER AS EXPECTED BY YOUR create-guest-order FUNCTION
-      // Your backend expects p_name, p_phone, p_delivery_lat, p_delivery_lon, p_delivery_location_name, p_delivery_type, p_cart
       const p_cart = items.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
@@ -187,13 +185,11 @@ const CheckoutPage = () => {
         p_delivery_lon: deliveryLng,
         p_delivery_location_name: deliveryLocationName,
         p_delivery_type: selectedDeliveryOption,
-        p_cart, // must be non-empty array
+        p_cart,
       };
 
-      // Place order based on authentication
       let result;
       if (user) {
-        // Authenticated users: Use AUTHENTICATED function
         result = await supabase.functions.invoke("create-authenticated-order", {
           body: {
             p_delivery_lat: deliveryLat,
@@ -205,30 +201,30 @@ const CheckoutPage = () => {
           }
         });
       } else {
-        // GUEST users: Use GUEST function with GUEST PARAMS (from above)
         result = await supabase.functions.invoke("create-guest-order", {
           body: orderData
         });
       }
 
-      if (result.error) {
-        console.error('Order placement error:', result.error)
-        throw result.error
+      if (result.error || !result.data?.order_id) {
+        toast({
+          title: "Order Failed",
+          description: result.error?.message || "Failed to place order. Please check your details and try again.",
+          variant: "destructive",
+        });
+        setIsPlacingOrder(false)
+        return
       }
 
-      // Clear cart and navigate to success page
       clearCart()
-      
       const orderId = result.data?.order_id || 'unknown'
       navigate(`/order-confirmation/${orderId}`)
-      
       toast({
         title: "Order Placed Successfully!",
         description: "You will receive a confirmation shortly.",
       })
 
     } catch (error) {
-      console.error('Error placing order:', error)
       toast({
         title: "Order Failed",
         description: "Failed to place order. Please check your details and try again.",

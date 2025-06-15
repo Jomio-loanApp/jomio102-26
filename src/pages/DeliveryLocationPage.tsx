@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GoogleMapSelector from "@/components/GoogleMapSelector";
@@ -5,13 +6,17 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import { useLocationStore } from "@/stores/locationStore";
+import { useAuthStore } from "@/stores/authStore";
+import { supabase } from "@/lib/supabase";
 
 const DeliveryLocationPage = () => {
   const navigate = useNavigate();
   const setDeliveryLocation = useLocationStore(state => state.setDeliveryLocation);
+  const { user } = useAuthStore();
   const [selected, setSelected] = useState<{lat: number, lng: number, address: string} | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selected) {
       toast({
         title: "Please select a location.",
@@ -19,14 +24,48 @@ const DeliveryLocationPage = () => {
       });
       return;
     }
-    // This will save the selected location in global location store (Zustand)
+
+    // Save location to global store
     setDeliveryLocation(selected.lat, selected.lng, selected.address);
-    toast({
-      title: "Location Confirmed!",
-      description: selected.address,
-      variant: "default",
-    });
-    navigate("/checkout"); // now go to checkout
+
+    // Authenticated user: Save new address
+    if (user && selected) {
+      setIsSaving(true);
+      try {
+        // Save new address to user's saved addresses table
+        const { error } = await supabase.from("addresses").insert([{
+          profile_id: user.id,
+          address_nickname: "Saved Location " + new Date().toLocaleTimeString(),
+          latitude: selected.lat,
+          longitude: selected.lng,
+          location_name: selected.address,
+          is_default: false
+        }]);
+        if (error) {
+          throw error;
+        }
+        toast({
+          title: "Address Saved!",
+          description: "You can re-use this location next time.",
+          variant: "default",
+        });
+      } catch (err) {
+        toast({
+          title: "Error saving address",
+          description: "Could not save, but you can proceed with this location.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSaving(false);
+      }
+    } else {
+      toast({
+        title: "Location Confirmed!",
+        description: selected.address,
+        variant: "default",
+      });
+    }
+    navigate("/checkout");
   };
 
   return (
@@ -49,9 +88,10 @@ const DeliveryLocationPage = () => {
           className="w-full mt-6 text-base"
           size="lg"
           onClick={handleConfirm}
-          disabled={!selected}
+          loading={isSaving}
+          disabled={!selected || isSaving}
         >
-          Confirm Location & Proceed
+          {isSaving ? "Saving..." : "Confirm Location & Proceed"}
         </Button>
       </div>
     </div>

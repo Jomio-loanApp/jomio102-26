@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useHomeStore } from '@/stores/homeStore'
 import DynamicHeader from '@/components/DynamicHeader'
@@ -6,6 +5,8 @@ import CategoryScroller from '@/components/CategoryScroller'
 import BannerStrip from '@/components/BannerStrip'
 import ContentSectionRenderer from '@/components/ContentSectionRenderer'
 import ProductQuickView from '@/components/ProductQuickView'
+import { useAuthStore } from '@/stores/authStore'
+import LoginModal from '@/components/LoginModal'
 
 interface Product {
   product_id: string
@@ -23,6 +24,8 @@ interface Product {
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const { user } = useAuthStore()
   const { 
     selectedCategory,
     fetchHeaderBackground,
@@ -33,14 +36,12 @@ const HomePage = () => {
   } = useHomeStore()
 
   useEffect(() => {
-    // Initialize with default home content
     fetchHeaderBackground()
     fetchBannerStrips()
     fetchHomeContentSections()
   }, [fetchHeaderBackground, fetchBannerStrips, fetchHomeContentSections])
 
   const handleSearch = (query: string) => {
-    console.log('Search query:', query)
     setSearchQuery(query)
     // TODO: Implement search results with interspersed content
   }
@@ -51,6 +52,15 @@ const HomePage = () => {
 
   const handleCloseQuickView = () => {
     setSelectedProduct(null)
+  }
+
+  // Profile button behavior for top right icon:
+  const handleProfileClick = () => {
+    if (!user) {
+      setShowLoginModal(true)
+    } else {
+      window.location.href = "/profile"
+    }
   }
 
   // Transform product for ProductQuickView component
@@ -88,13 +98,13 @@ const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Extended Dynamic Header Background Area */}
       <div 
         className="relative"
         style={getHeaderStyle()}
       >
         {/* Dynamic Header */}
         <DynamicHeader
+          onProfileClick={handleProfileClick}
           onSearch={handleSearch}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -106,13 +116,10 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Banner Strip - Full width, outside background area */}
       <BannerStrip />
 
-      {/* Main Content */}
       <main className="relative">
         {searchQuery ? (
-          // Search Results View
           <div className="px-4 py-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               Search Results for "{searchQuery}"
@@ -120,12 +127,10 @@ const HomePage = () => {
             <p className="text-gray-600">Search functionality will be implemented here with interspersed content.</p>
           </div>
         ) : (
-          // Dynamic Content Sections
           <ContentSectionRenderer onQuickView={handleQuickView} />
         )}
       </main>
 
-      {/* Product Quick View Modal */}
       {selectedProduct && (
         <ProductQuickView
           product={transformProductForQuickView(selectedProduct)}
@@ -133,6 +138,12 @@ const HomePage = () => {
           onClose={handleCloseQuickView}
         />
       )}
+
+      {/* LoginModal for top profile click */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
     </div>
   )
 }

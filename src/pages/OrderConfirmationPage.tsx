@@ -1,53 +1,41 @@
-import { useEffect, useState } from "react";
+
 import { useParams, useNavigate } from "react-router-dom";
-import { CheckCircle, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const OrderConfirmationPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full">
-        <Card>
-          <CardHeader className="text-center pb-4">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-            <CardTitle className="text-2xl text-green-600">Order Placed Successfully!</CardTitle>
-            <p className="text-gray-600 mt-2">
-              Thank you! Your order has been placed successfully.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Order ID:</span>
-                <span className="font-semibold">#{orderId}</span>
-              </div>
-            </div>
-            <div className="bg-blue-50 p-4 rounded-lg flex items-center gap-2 mt-2">
-              <Receipt className="w-5 h-5 text-blue-600" />
-              <span className="text-sm text-blue-800 font-medium">Check order status in Order History at any time.</span>
-            </div>
-            <div className="space-y-3 mt-6">
-              <Button onClick={() => navigate("/profile/orders")} className="w-full" variant="outline">
-                View Orders
-              </Button>
-              <Button onClick={() => navigate("/")} className="w-full">
-                Continue Shopping
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-green-50">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 flex flex-col items-center gap-6">
+        <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
+          <svg
+            className="w-10 h-10 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-green-700 text-center">
+          Thank you! Your order has been placed successfully.
+        </h2>
+        <p className="text-lg text-gray-700 text-center">
+          Your Order ID is: <span className="font-semibold text-gray-900">#{orderId}</span>
+        </p>
+        <Button
+          className="w-full mt-2"
+          onClick={() => navigate("/")}
+          variant="default"
+        >
+          Continue Shopping
+        </Button>
       </div>
     </div>
   );
 };
+
 export default OrderConfirmationPage;

@@ -153,14 +153,15 @@ const CheckoutPage = () => {
 
   const handlePlaceOrder = async () => {
     setOrderError(null);
+
     // Validation
     if (!customerName.trim() || !customerPhone.trim()) {
       toast({
         title: "Missing Information",
         description: "Please fill in your name and phone number.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     if (!selectedDeliveryOption) {
@@ -168,23 +169,23 @@ const CheckoutPage = () => {
         title: "Select Delivery Option",
         description: "Please choose a delivery option to continue.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsPlacingOrder(true)
+    setIsPlacingOrder(true);
 
     try {
       const p_cart = items.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
-        price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, ''))
+        price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
       }));
 
-      // Everything in correct backend format for each function
+      let orderData, error;
       if (user) {
-        // Auth user: create-authenticated-order
-        const { data, error } = await supabase.functions.invoke("create-authenticated-order", {
+        // Authenticated user: create-authenticated-order
+        const response = await supabase.functions.invoke("create-authenticated-order", {
           body: {
             p_delivery_lat: deliveryLat,
             p_delivery_lon: deliveryLng,
@@ -194,46 +195,41 @@ const CheckoutPage = () => {
             p_customer_notes: customerNotes || null,
           },
         });
-        if (error || !data?.order_id) {
-          throw new Error(error?.message || "Order placement failed.");
-        }
-        clearCart();
-        // FIX: immediately navigate to confirmation with order ID
-        navigate(`/order-confirmation/${data.order_id}`);
-        return;
+        orderData = response.data;
+        error = response.error;
       } else {
-        // Guest: create-guest-order
-        const guestOrderBody = {
-          p_name: customerName,
-          p_phone: customerPhone,
-          p_delivery_lat: deliveryLat,
-          p_delivery_lon: deliveryLng,
-          p_delivery_location_name: deliveryLocationName,
-          p_delivery_type: selectedDeliveryOption,
-          p_cart,
-        };
-        const { data, error } = await supabase.functions.invoke("create-guest-order", {
-          body: guestOrderBody,
+        // Guest user: create-guest-order
+        const response = await supabase.functions.invoke("create-guest-order", {
+          body: {
+            p_name: customerName,
+            p_phone: customerPhone,
+            p_delivery_lat: deliveryLat,
+            p_delivery_lon: deliveryLng,
+            p_delivery_location_name: deliveryLocationName,
+            p_delivery_type: selectedDeliveryOption,
+            p_cart,
+          },
         });
-        if (error || !data?.order_id) {
-          throw new Error(error?.message || "Order placement failed.");
-        }
-        clearCart();
-        // FIX: immediately navigate to confirmation with order ID
-        navigate(`/order-confirmation/${data.order_id}`);
-        return;
+        orderData = response.data;
+        error = response.error;
       }
-      // This toast may be unreachable; 
-      // toast({ title: "Order Placed Successfully!", description: "You will receive a confirmation shortly." });
+
+      // Check for API-reported errors
+      if (error || !orderData?.order_id) {
+        throw new Error(error?.message || "Order placement failed.");
+      }
+
+      clearCart();
+      navigate(`/order-confirmation/${orderData.order_id}`);
     } catch (error: any) {
-      setOrderError("Order placement failed. Please review your details and try again.");
+      setOrderError("Order placement failed. Please check your details and try again.");
       toast({
         title: "Order Failed",
         description: error?.message || "Order placement failed. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsPlacingOrder(false)
+      setIsPlacingOrder(false);
     }
   };
 

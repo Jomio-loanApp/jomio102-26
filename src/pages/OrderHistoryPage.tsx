@@ -35,7 +35,8 @@ const OrderHistoryPage = () => {
     try {
       const from = (pageNum - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      // Only use Supabase JS client paging, no offset/limit in select!
+      // FIX: Do NOT manually add offset/limit as params! Only use .range (this will fix the 400 error!)
+      // And ensure we use only column names that exist in your backend
       const { data, error } = await supabase
         .from("orders")
         .select("id, ordered_at, status, total_amount")

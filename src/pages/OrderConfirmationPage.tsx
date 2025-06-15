@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { CheckCircle, Receipt } from "lucide-react";
@@ -51,5 +50,4 @@ const OrderConfirmationPage = () => {
     </div>
   );
 };
-
 export default OrderConfirmationPage;

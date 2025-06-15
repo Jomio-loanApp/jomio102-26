@@ -198,9 +198,11 @@ const CheckoutPage = () => {
           throw new Error(error?.message || "Order placement failed.");
         }
         clearCart();
+        // FIX: immediately navigate to confirmation with order ID
         navigate(`/order-confirmation/${data.order_id}`);
+        return;
       } else {
-        // Guest: create-guest-order, also map names as required by backend
+        // Guest: create-guest-order
         const guestOrderBody = {
           p_name: customerName,
           p_phone: customerPhone,
@@ -217,12 +219,12 @@ const CheckoutPage = () => {
           throw new Error(error?.message || "Order placement failed.");
         }
         clearCart();
+        // FIX: immediately navigate to confirmation with order ID
         navigate(`/order-confirmation/${data.order_id}`);
+        return;
       }
-      toast({
-        title: "Order Placed Successfully!",
-        description: "You will receive a confirmation shortly.",
-      });
+      // This toast may be unreachable; 
+      // toast({ title: "Order Placed Successfully!", description: "You will receive a confirmation shortly." });
     } catch (error: any) {
       setOrderError("Order placement failed. Please review your details and try again.");
       toast({

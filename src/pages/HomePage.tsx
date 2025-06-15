@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { useHomeStore } from '@/stores/homeStore'
 import DynamicHeader from '@/components/DynamicHeader'
@@ -54,14 +55,7 @@ const HomePage = () => {
     setSelectedProduct(null)
   }
 
-  // Profile button behavior for top right icon:
-  const handleProfileClick = () => {
-    if (!user) {
-      setShowLoginModal(true)
-    } else {
-      window.location.href = "/profile"
-    }
-  }
+  // Remove handleProfileClick -- manage login modal in bottom nav for unauthenticated, as top profile button is not present in DynamicHeader
 
   // Transform product for ProductQuickView component
   const transformProductForQuickView = (product: Product) => {
@@ -104,7 +98,6 @@ const HomePage = () => {
       >
         {/* Dynamic Header */}
         <DynamicHeader
-          onProfileClick={handleProfileClick}
           onSearch={handleSearch}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}

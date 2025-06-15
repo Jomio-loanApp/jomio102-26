@@ -88,7 +88,6 @@ const DeliveryLocationPage = () => {
           className="w-full mt-6 text-base"
           size="lg"
           onClick={handleConfirm}
-          loading={isSaving}
           disabled={!selected || isSaving}
         >
           {isSaving ? "Saving..." : "Confirm Location & Proceed"}

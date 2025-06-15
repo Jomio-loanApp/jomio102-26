@@ -38,22 +38,6 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
     setLocalQuery(urlQ)
   }, [location.pathname, location.search])
 
-  // Unified search navigate logic
-  useEffect(() => {
-    const trimmed = debouncedTerm.trim()
-    if (trimmed.length >= MIN_SEARCH_LENGTH && trimmed !== lastQueried.current) {
-      lastQueried.current = trimmed
-      if (!location.pathname.startsWith('/search')) {
-        navigate(`/search?q=${encodeURIComponent(trimmed)}`)
-      } else {
-        navigate(`/search?q=${encodeURIComponent(trimmed)}`, { replace: true })
-      }
-    }
-    if (trimmed.length < MIN_SEARCH_LENGTH) {
-      lastQueried.current = ''
-    }
-  }, [debouncedTerm, navigate, location.pathname])
-
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY
@@ -64,9 +48,11 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [setHeaderSticky, setShowHeaderText])
 
+  // Only trigger search on Enter submission
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = localQuery.trim()
+    // Only search if query is long enough
     if (trimmed.length >= MIN_SEARCH_LENGTH) {
       navigate(`/search?q=${encodeURIComponent(trimmed)}`)
     }

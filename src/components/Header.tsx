@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import LoginModal from './LoginModal'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useDebounce } from '@/hooks/useDebounce'
 
 interface HeaderProps {
   showSearch?: boolean
@@ -19,36 +18,18 @@ const Header = ({ showSearch = true }: HeaderProps) => {
   const { getItemCount } = useCartStore()
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const debouncedQuery = useDebounce(searchQuery, 400)
   const navigate = useNavigate()
   const location = useLocation()
-  const lastQueried = useRef('')
+  // Remove debouncedQuery and all useDebounce usage
 
-  // Only navigate and trigger search if query is >= 2 letters and has changed
-  useEffect(() => {
-    const trimmed = debouncedQuery.trim()
-    if (trimmed.length >= MIN_SEARCH_LENGTH && trimmed !== lastQueried.current) {
-      lastQueried.current = trimmed
-      if (!location.pathname.startsWith('/search')) {
-        navigate(`/search?q=${encodeURIComponent(trimmed)}`)
-      } else {
-        // If already on /search, update query param without pushing a new entry if possible
-        navigate(`/search?q=${encodeURIComponent(trimmed)}`, { replace: true })
-      }
-    }
-    if (trimmed.length < MIN_SEARCH_LENGTH) {
-      lastQueried.current = ''
-    }
-    // eslint-disable-next-line
-  }, [debouncedQuery])
-
-  // Keep search bar populated from URL when visiting /search?q=...
+  // Keep search bar populated from URL q param, but do NOT auto-search
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const urlQ = params.get('q') || ''
     setSearchQuery(urlQ)
   }, [location.pathname, location.search])
 
+  // Only trigger search on Enter
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = searchQuery.trim()
@@ -89,7 +70,6 @@ const Header = ({ showSearch = true }: HeaderProps) => {
                 </form>
               </div>
             )}
-
             {/* User Actions */}
             <div className="flex items-center space-x-4">
               {/* Cart */}

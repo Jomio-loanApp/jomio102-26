@@ -1,8 +1,6 @@
-
 import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { useDebounce } from "@/hooks/useDebounce";
 import ProductCard from "@/components/ProductCard";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -33,7 +31,6 @@ const MIN_SEARCH_LENGTH = 2;
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
   const searchTerm = (searchParams.get("q") || "").trim();
-  const debouncedSearchTerm = useDebounce(searchTerm, 400);
 
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<Product[]>([]);
@@ -42,7 +39,7 @@ export default function SearchResultsPage() {
 
   // Fetch search products results
   useEffect(() => {
-    if (debouncedSearchTerm.length < MIN_SEARCH_LENGTH) {
+    if (searchTerm.length < MIN_SEARCH_LENGTH) {
       setSearchResults([]);
       setError(null);
       return;
@@ -50,7 +47,7 @@ export default function SearchResultsPage() {
     setIsLoading(true);
     setError(null);
     supabase
-      .rpc("search_products", { search_term: debouncedSearchTerm })
+      .rpc("search_products", { search_term: searchTerm })
       .then(({ data, error }) => {
         if (error) {
           setError("Could not fetch search results.");
@@ -60,9 +57,9 @@ export default function SearchResultsPage() {
         }
         setIsLoading(false);
       });
-  }, [debouncedSearchTerm]);
+  }, [searchTerm]);
 
-  // Fetch interspersed content for "search_results_interspersed_content"
+  // Fetch interspersed (dynamic) content for "search_results_interspersed_content"
   useEffect(() => {
     supabase
       .from("home_content_sections")
@@ -70,7 +67,10 @@ export default function SearchResultsPage() {
       .eq("display_context", "search_results_interspersed_content")
       .order("display_order", { ascending: true })
       .then(({ data }) => {
-        setInterspersedContent(data || []);
+        // Only keep sections with non-empty section_items
+        setInterspersedContent((data || []).filter((section: InterspersedContentSection) =>
+          Array.isArray(section.section_items) && section.section_items.length > 0
+        ));
       });
   }, []);
 
@@ -79,7 +79,6 @@ export default function SearchResultsPage() {
     const merged: Array<Product | { interspersedContent: InterspersedContentSection }> = [];
     let productIdx = 0;
     let contentIdx = 0;
-
     while (productIdx < searchResults.length || contentIdx < interspersedContent.length) {
       // Add up to PRODUCT_CHUNK products
       for (let i = 0; i < PRODUCT_CHUNK && productIdx < searchResults.length; ++i, ++productIdx) {
@@ -150,8 +149,9 @@ export default function SearchResultsPage() {
   );
 }
 
-// Dummy; swap with real dynamic renderer as needed
+// Show only if section.section_items present and length > 0
 function InterspersedContentBlock({ section }: { section: InterspersedContentSection }) {
+  if (!section.section_items || !section.section_items.length) return null;
   // Simple renderer for the section for now; can expand as needed based on section_type
   return (
     <div className="bg-white shadow rounded-lg p-4 text-center">

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useHomeStore } from '@/stores/homeStore'
 import DynamicHeader from '@/components/DynamicHeader'
@@ -101,9 +100,6 @@ const HomePage = () => {
       >
         {/* Dynamic Header */}
         <DynamicHeader
-          onSearch={handleSearch}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
           onProfileClick={handleProfileClick}
         />
 

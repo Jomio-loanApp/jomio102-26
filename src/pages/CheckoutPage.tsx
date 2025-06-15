@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -173,34 +172,43 @@ const CheckoutPage = () => {
     setIsPlacingOrder(true)
 
     try {
+      // STRUCTURE THE ORDER AS EXPECTED BY YOUR create-guest-order FUNCTION
+      // Your backend expects p_name, p_phone, p_delivery_lat, p_delivery_lon, p_delivery_location_name, p_delivery_type, p_cart
+      const p_cart = items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, ''))
+      }));
+
       const orderData = {
-        p_customer_name: customerName,
-        p_customer_phone: customerPhone,
+        p_name: customerName,
+        p_phone: customerPhone,
         p_delivery_lat: deliveryLat,
         p_delivery_lon: deliveryLng,
         p_delivery_location_name: deliveryLocationName,
         p_delivery_type: selectedDeliveryOption,
-        p_customer_notes: customerNotes,
-        p_cart_items: items.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, ''))
-        }))
-      }
+        p_cart, // must be non-empty array
+      };
 
-      console.log('Placing order with data:', orderData)
-
-      let result
+      // Place order based on authentication
+      let result;
       if (user) {
-        // Authenticated user - use create-authenticated-order
-        result = await supabase.functions.invoke('create-authenticated-order', {
-          body: orderData
-        })
+        // Authenticated users: Use AUTHENTICATED function
+        result = await supabase.functions.invoke("create-authenticated-order", {
+          body: {
+            p_delivery_lat: deliveryLat,
+            p_delivery_lon: deliveryLng,
+            p_delivery_location_name: deliveryLocationName,
+            p_delivery_type: selectedDeliveryOption,
+            p_cart,
+            p_customer_notes: customerNotes || null,
+          }
+        });
       } else {
-        // Guest user
-        result = await supabase.functions.invoke('create-guest-order', {
+        // GUEST users: Use GUEST function with GUEST PARAMS (from above)
+        result = await supabase.functions.invoke("create-guest-order", {
           body: orderData
-        })
+        });
       }
 
       if (result.error) {
@@ -208,8 +216,6 @@ const CheckoutPage = () => {
         throw result.error
       }
 
-      console.log('Order placed successfully:', result.data)
-      
       // Clear cart and navigate to success page
       clearCart()
       

@@ -1,13 +1,14 @@
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GoogleMapSelector from "@/components/GoogleMapSelector";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
+import { useLocationStore } from "@/stores/locationStore";
 
 const DeliveryLocationPage = () => {
   const navigate = useNavigate();
+  const setDeliveryLocation = useLocationStore(state => state.setDeliveryLocation);
   const [selected, setSelected] = useState<{lat: number, lng: number, address: string} | null>(null);
 
   const handleConfirm = () => {
@@ -18,14 +19,14 @@ const DeliveryLocationPage = () => {
       });
       return;
     }
-    // Save the selected location to the store or pass to checkout as needed
+    // This will save the selected location in global location store (Zustand)
+    setDeliveryLocation(selected.lat, selected.lng, selected.address);
     toast({
       title: "Location Confirmed!",
       description: selected.address,
       variant: "default",
     });
-    // Proceed to next checkout page
-    navigate("/checkout");
+    navigate("/checkout"); // now go to checkout
   };
 
   return (

@@ -1,77 +1,79 @@
-
 import { useEffect, useRef, useState } from 'react'
 import { Search, User, ShoppingCart } from 'lucide-react'
 import { useHomeStore } from '@/stores/homeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { Input } from '@/components/ui/input'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useDebounce } from '@/hooks/useDebounce'
 
+const MIN_SEARCH_LENGTH = 2
+
 interface DynamicHeaderProps {
-  onSearch: (query: string) => void
-  searchQuery: string
-  setSearchQuery: (query: string) => void
   onProfileClick?: () => void
 }
 
-const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }: DynamicHeaderProps) => {
+const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuthStore()
   const { getItemCount } = useCartStore()
-  const { 
-    headerBackground, 
-    isHeaderSticky, 
+  const {
+    headerBackground,
+    isHeaderSticky,
     showHeaderText,
     setHeaderSticky,
     setShowHeaderText
   } = useHomeStore()
-  
-  const headerRef = useRef<HTMLDivElement>(null)
+
   const cartItemCount = getItemCount()
-  const [localQuery, setLocalQuery] = useState(searchQuery || "")
+  const [localQuery, setLocalQuery] = useState('')
   const debouncedTerm = useDebounce(localQuery, 400)
-  const hasNavigated = useRef(false)
+  const lastQueried = useRef('')
 
+  // Keep input synced with URL q param
   useEffect(() => {
-    setLocalQuery(searchQuery)
-  }, [searchQuery])
+    const params = new URLSearchParams(location.search)
+    const urlQ = params.get('q') || ''
+    setLocalQuery(urlQ)
+  }, [location.pathname, location.search])
 
-  // Debounced navigation on header
+  // Unified search navigate logic
   useEffect(() => {
-    if (debouncedTerm && !hasNavigated.current) {
-      hasNavigated.current = true
-      navigate(`/search?q=${encodeURIComponent(debouncedTerm)}`)
+    const trimmed = debouncedTerm.trim()
+    if (trimmed.length >= MIN_SEARCH_LENGTH && trimmed !== lastQueried.current) {
+      lastQueried.current = trimmed
+      if (!location.pathname.startsWith('/search')) {
+        navigate(`/search?q=${encodeURIComponent(trimmed)}`)
+      } else {
+        navigate(`/search?q=${encodeURIComponent(trimmed)}`, { replace: true })
+      }
     }
-    if (!debouncedTerm && hasNavigated.current) {
-      hasNavigated.current = false
+    if (trimmed.length < MIN_SEARCH_LENGTH) {
+      lastQueried.current = ''
     }
-    // eslint-disable-next-line
-  }, [debouncedTerm, navigate])
+  }, [debouncedTerm, navigate, location.pathname])
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY
-      const threshold = 100
-      
-      setHeaderSticky(scrollY > threshold)
+      setHeaderSticky(scrollY > 100)
       setShowHeaderText(scrollY <= 50)
     }
-
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [setHeaderSticky, setShowHeaderText])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (localQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(localQuery.trim())}`)
+    const trimmed = localQuery.trim()
+    if (trimmed.length >= MIN_SEARCH_LENGTH) {
+      navigate(`/search?q=${encodeURIComponent(trimmed)}`)
     }
   }
 
   const getHeaderStyle = () => {
     if (!headerBackground) return {}
-    
     if (headerBackground.background_image_url) {
       return {
         backgroundImage: `url(${headerBackground.background_image_url})`,
@@ -80,19 +82,16 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
         backgroundRepeat: 'no-repeat'
       }
     }
-    
     if (headerBackground.background_color_hex) {
       return {
         backgroundColor: headerBackground.background_color_hex
       }
     }
-    
     return {}
   }
 
   return (
-    <div 
-      ref={headerRef}
+    <div
       className={`
         ${isHeaderSticky ? 'fixed top-0 left-0 right-0 z-50 bg-white shadow-lg' : 'relative'}
         transition-all duration-300 ease-in-out
@@ -103,9 +102,9 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
         {/* Store Title - Hide when scrolled */}
         {showHeaderText && !isHeaderSticky && (
           <div className="text-center mb-4">
-            <h1 
+            <h1
               className="text-3xl font-bold cursor-pointer transition-opacity duration-300"
-              style={{ 
+              style={{
                 color: headerBackground?.background_image_url ? 'white' : '#059669',
                 textShadow: headerBackground?.background_image_url ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
               }}
@@ -115,7 +114,6 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
             </h1>
           </div>
         )}
-
         {/* Search Bar and Actions */}
         <div className="flex items-center gap-3">
           {/* Search Form */}
@@ -124,17 +122,15 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 type="text"
+                inputMode="search"
                 placeholder="Search for products..."
                 value={localQuery}
-                onChange={(e) => {
-                  setLocalQuery(e.target.value)
-                  setSearchQuery(e.target.value)
-                }}
+                onChange={e => setLocalQuery(e.target.value)}
                 className="pl-10 pr-4 py-3 w-full bg-white rounded-full border-2 border-gray-200 focus:border-green-500 transition-colors"
+                minLength={MIN_SEARCH_LENGTH}
               />
             </div>
           </form>
-
           {/* Cart Button */}
           <Link
             to="/cart"
@@ -147,7 +143,6 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
               </span>
             )}
           </Link>
-
           {/* User Button */}
           {user ? (
             <Link to="/profile" className="p-3 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow">
@@ -170,4 +165,3 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
 }
 
 export default DynamicHeader
-

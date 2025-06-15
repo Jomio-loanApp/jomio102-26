@@ -1,42 +1,59 @@
-
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { User, LogIn, ShoppingCart, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import LoginModal from './LoginModal'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useDebounce } from '@/hooks/useDebounce'
 
 interface HeaderProps {
-  onSearch?: (query: string) => void
   showSearch?: boolean
 }
 
-const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
+const MIN_SEARCH_LENGTH = 2
+
+const Header = ({ showSearch = true }: HeaderProps) => {
   const { user, profile } = useAuthStore()
   const { getItemCount } = useCartStore()
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const navigate = useNavigate()
   const debouncedQuery = useDebounce(searchQuery, 400)
-  const hasNavigatedForQuery = useRef(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const lastQueried = useRef('')
 
-  // Debounced navigation to /search?q=...
-  if (debouncedQuery && !hasNavigatedForQuery.current) {
-    hasNavigatedForQuery.current = true
-    navigate(`/search?q=${encodeURIComponent(debouncedQuery)}`)
-  }
-  if (!debouncedQuery && hasNavigatedForQuery.current) {
-    hasNavigatedForQuery.current = false
-  }
+  // Only navigate and trigger search if query is >= 2 letters and has changed
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim()
+    if (trimmed.length >= MIN_SEARCH_LENGTH && trimmed !== lastQueried.current) {
+      lastQueried.current = trimmed
+      if (!location.pathname.startsWith('/search')) {
+        navigate(`/search?q=${encodeURIComponent(trimmed)}`)
+      } else {
+        // If already on /search, update query param without pushing a new entry if possible
+        navigate(`/search?q=${encodeURIComponent(trimmed)}`, { replace: true })
+      }
+    }
+    if (trimmed.length < MIN_SEARCH_LENGTH) {
+      lastQueried.current = ''
+    }
+    // eslint-disable-next-line
+  }, [debouncedQuery])
+
+  // Keep search bar populated from URL when visiting /search?q=...
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const urlQ = params.get('q') || ''
+    setSearchQuery(urlQ)
+  }, [location.pathname, location.search])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    // Immediate navigation on submit as well
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
+    const trimmed = searchQuery.trim()
+    if (trimmed.length >= MIN_SEARCH_LENGTH) {
+      navigate(`/search?q=${encodeURIComponent(trimmed)}`)
     }
   }
 
@@ -53,7 +70,6 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
                 JOMIO Online Store
               </h1>
             </div>
-
             {/* Search Bar - Desktop */}
             {showSearch && (
               <div className="hidden md:flex flex-1 max-w-lg mx-8">
@@ -62,10 +78,12 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <Input
                       type="text"
+                      inputMode="search"
                       placeholder="Search products..."
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={e => setSearchQuery(e.target.value)}
                       className="pl-10 pr-4 py-2 w-full"
+                      minLength={MIN_SEARCH_LENGTH}
                     />
                   </div>
                 </form>
@@ -86,7 +104,6 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
                   </span>
                 )}
               </button>
-
               {/* User */}
               {user ? (
                 <button
@@ -111,7 +128,6 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
               )}
             </div>
           </div>
-
           {/* Search Bar - Mobile */}
           {showSearch && (
             <div className="md:hidden pb-4">
@@ -120,10 +136,12 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
                     type="text"
+                    inputMode="search"
                     placeholder="Search products..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={e => setSearchQuery(e.target.value)}
                     className="pl-10 pr-4 py-2 w-full"
+                    minLength={MIN_SEARCH_LENGTH}
                   />
                 </div>
               </form>
@@ -131,7 +149,6 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
           )}
         </div>
       </header>
-
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
@@ -141,4 +158,3 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
 }
 
 export default Header
-

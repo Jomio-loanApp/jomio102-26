@@ -28,10 +28,11 @@ export interface InterspersedContentSection {
 }
 
 const PRODUCT_CHUNK = 6;
+const MIN_SEARCH_LENGTH = 2;
 
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
-  const searchTerm = searchParams.get("q") || "";
+  const searchTerm = (searchParams.get("q") || "").trim();
   const debouncedSearchTerm = useDebounce(searchTerm, 400);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -41,7 +42,7 @@ export default function SearchResultsPage() {
 
   // Fetch search products results
   useEffect(() => {
-    if (!debouncedSearchTerm) {
+    if (debouncedSearchTerm.length < MIN_SEARCH_LENGTH) {
       setSearchResults([]);
       setError(null);
       return;
@@ -52,7 +53,6 @@ export default function SearchResultsPage() {
       .rpc("search_products", { search_term: debouncedSearchTerm })
       .then(({ data, error }) => {
         if (error) {
-          // console.log("Search RPC ERROR", error);
           setError("Could not fetch search results.");
           setSearchResults([]);
         } else {
@@ -96,7 +96,7 @@ export default function SearchResultsPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen py-8 px-2 sm:px-4 max-w-7xl mx-auto">
-      {searchTerm ? (
+      {searchTerm.length >= MIN_SEARCH_LENGTH ? (
         <>
           <h2 className="text-lg font-semibold mb-5 text-gray-900">
             {isLoading
@@ -106,7 +106,7 @@ export default function SearchResultsPage() {
           </h2>
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {[...Array(6)].map((_, i) => (
+              {[...Array(PRODUCT_CHUNK)].map((_, i) => (
                 <div key={i} className="h-52"><Skeleton className="w-full h-full" /></div>
               ))}
             </div>

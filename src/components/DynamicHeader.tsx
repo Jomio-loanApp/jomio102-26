@@ -1,11 +1,12 @@
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Search, User, ShoppingCart } from 'lucide-react'
 import { useHomeStore } from '@/stores/homeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { Input } from '@/components/ui/input'
 import { Link, useNavigate } from 'react-router-dom'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface DynamicHeaderProps {
   onSearch: (query: string) => void
@@ -28,6 +29,25 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
   
   const headerRef = useRef<HTMLDivElement>(null)
   const cartItemCount = getItemCount()
+  const [localQuery, setLocalQuery] = useState(searchQuery || "")
+  const debouncedTerm = useDebounce(localQuery, 400)
+  const hasNavigated = useRef(false)
+
+  useEffect(() => {
+    setLocalQuery(searchQuery)
+  }, [searchQuery])
+
+  // Debounced navigation on header
+  useEffect(() => {
+    if (debouncedTerm && !hasNavigated.current) {
+      hasNavigated.current = true
+      navigate(`/search?q=${encodeURIComponent(debouncedTerm)}`)
+    }
+    if (!debouncedTerm && hasNavigated.current) {
+      hasNavigated.current = false
+    }
+    // eslint-disable-next-line
+  }, [debouncedTerm, navigate])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -44,8 +64,8 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (searchQuery.trim()) {
-      onSearch(searchQuery.trim())
+    if (localQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(localQuery.trim())}`)
     }
   }
 
@@ -105,8 +125,11 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
               <Input
                 type="text"
                 placeholder="Search for products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={localQuery}
+                onChange={(e) => {
+                  setLocalQuery(e.target.value)
+                  setSearchQuery(e.target.value)
+                }}
                 className="pl-10 pr-4 py-3 w-full bg-white rounded-full border-2 border-gray-200 focus:border-green-500 transition-colors"
               />
             </div>
@@ -147,3 +170,4 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }
 }
 
 export default DynamicHeader
+

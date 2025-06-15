@@ -1,5 +1,5 @@
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { User, LogIn, ShoppingCart, Search } from 'lucide-react'
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import LoginModal from './LoginModal'
 import { useNavigate } from 'react-router-dom'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface HeaderProps {
   onSearch?: (query: string) => void
@@ -19,11 +20,23 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
+  const debouncedQuery = useDebounce(searchQuery, 400)
+  const hasNavigatedForQuery = useRef(false)
+
+  // Debounced navigation to /search?q=...
+  if (debouncedQuery && !hasNavigatedForQuery.current) {
+    hasNavigatedForQuery.current = true
+    navigate(`/search?q=${encodeURIComponent(debouncedQuery)}`)
+  }
+  if (!debouncedQuery && hasNavigatedForQuery.current) {
+    hasNavigatedForQuery.current = false
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (onSearch && searchQuery.trim()) {
-      onSearch(searchQuery.trim())
+    // Immediate navigation on submit as well
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
     }
   }
 
@@ -128,3 +141,4 @@ const Header = ({ onSearch, showSearch = true }: HeaderProps) => {
 }
 
 export default Header
+

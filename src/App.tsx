@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -17,6 +16,8 @@ import SelectAddressPage from '@/pages/SelectAddressPage'
 import CheckoutPage from '@/pages/CheckoutPage'
 import OrderConfirmationPage from '@/pages/OrderConfirmationPage'
 import NotFound from '@/pages/NotFound'
+
+import SearchResultsPage from "@/pages/SearchResultsPage"
 
 function App() {
   const { initialize, isInitialized, user } = useAuthStore()
@@ -53,7 +54,7 @@ function App() {
           path="/profile/addresses" 
           element={<AddressManagementPage />} 
         />
-        
+
         {/* Checkout flow routes */}
         <Route 
           path="/select-address" 
@@ -62,6 +63,9 @@ function App() {
         <Route path="/set-delivery-location" element={<DeliveryLocationPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
+
+        {/* SEARCH ROUTE */}
+        <Route path="/search" element={<SearchResultsPage />} />
         
         {/* Fallback */}
         <Route path="*" element={<NotFound />} />

@@ -21,7 +21,6 @@ const OrderHistoryPage = () => {
   const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
-    // Route protect: if no user, redirect to login (or home as a fallback)
     if (!user) {
       navigate("/");
       return;
@@ -36,7 +35,7 @@ const OrderHistoryPage = () => {
     try {
       const from = (pageNum - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      // Strict minimal select for performance
+      // Only use Supabase JS client paging, no offset/limit in select!
       const { data, error } = await supabase
         .from("orders")
         .select("id, ordered_at, status, total_amount")
@@ -105,7 +104,7 @@ const OrderHistoryPage = () => {
                   <Card className="px-4 py-3 flex items-center justify-between gap-4 cursor-pointer hover:ring-2 hover:ring-green-100"
                         onClick={() => navigate(`/order-confirmation/${order.id}`)}>
                     <div>
-                      <div className="font-semibold">Order #{order.id.slice(-6)}</div>
+                      <div className="font-semibold">Order #{typeof order.id === 'string' ? order.id.slice(-6) : order.id}</div>
                       <div className="text-xs text-gray-500">
                         {formatDate(order.ordered_at)}
                       </div>

@@ -11,9 +11,10 @@ interface DynamicHeaderProps {
   onSearch: (query: string) => void
   searchQuery: string
   setSearchQuery: (query: string) => void
+  onProfileClick?: () => void
 }
 
-const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery }: DynamicHeaderProps) => {
+const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery, onProfileClick }: DynamicHeaderProps) => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { getItemCount } = useCartStore()
@@ -125,12 +126,20 @@ const DynamicHeader = ({ onSearch, searchQuery, setSearchQuery }: DynamicHeaderP
           </Link>
 
           {/* User Button */}
-          <Link
-            to={user ? '/profile' : '/login'}
-            className="p-3 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow"
-          >
-            <User className="w-6 h-6 text-gray-700" />
-          </Link>
+          {user ? (
+            <Link to="/profile" className="p-3 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow">
+              <User className="w-6 h-6 text-gray-700" />
+            </Link>
+          ) : (
+            <button
+              className="p-3 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow"
+              onClick={onProfileClick}
+              aria-label="Login"
+              type="button"
+            >
+              <User className="w-6 h-6 text-gray-700" />
+            </button>
+          )}
         </div>
       </div>
     </div>

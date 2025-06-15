@@ -55,9 +55,12 @@ const HomePage = () => {
     setSelectedProduct(null)
   }
 
-  // Remove handleProfileClick -- manage login modal in bottom nav for unauthenticated, as top profile button is not present in DynamicHeader
+  // For login modal from profile button
+  const handleProfileClick = () => {
+    if (!user) setShowLoginModal(true)
+    // else: user is authenticated; let DynamicHeader's /profile link handle
+  }
 
-  // Transform product for ProductQuickView component
   const transformProductForQuickView = (product: Product) => {
     return {
       id: product.product_id,
@@ -101,6 +104,7 @@ const HomePage = () => {
           onSearch={handleSearch}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
+          onProfileClick={handleProfileClick}
         />
 
         {/* Category Scroller - Inside the background area */}
@@ -132,7 +136,7 @@ const HomePage = () => {
         />
       )}
 
-      {/* LoginModal for top profile click */}
+      {/* LoginModal for profile button */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}

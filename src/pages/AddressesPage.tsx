@@ -33,6 +33,7 @@ const AddressesPage = () => {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingAddress, setEditingAddress] = useState<Address | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     nickname: '',
@@ -211,19 +212,28 @@ const AddressesPage = () => {
     if (!confirm('Are you sure you want to delete this address?')) return
 
     try {
+      setIsDeletingId(addressId)
+      console.log('Deleting address with ID:', addressId)
+      
       const { error } = await supabase
         .from('addresses')
         .delete()
         .eq('id', addressId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Error deleting address:', error)
+        throw error
+      }
 
+      console.log('Address deleted successfully')
       toast({
         title: "Success",
         description: "Address deleted successfully.",
       })
 
-      await fetchAddresses()
+      // Update local state by removing the deleted address
+      setAddresses(prev => prev.filter(addr => addr.id !== addressId))
+      
     } catch (error) {
       console.error('Error deleting address:', error)
       toast({
@@ -231,6 +241,8 @@ const AddressesPage = () => {
         description: "Failed to delete address. Please try again.",
         variant: "destructive"
       })
+    } finally {
+      setIsDeletingId(null)
     }
   }
 
@@ -367,9 +379,14 @@ const AddressesPage = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleDeleteAddress(address.id)}
+                            disabled={isDeletingId === address.id}
                             className="text-red-600 hover:text-red-700"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {isDeletingId === address.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -389,7 +406,7 @@ const AddressesPage = () => {
           resetForm()
         }
       }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingAddress ? 'Edit Address' : 'Add New Address'}

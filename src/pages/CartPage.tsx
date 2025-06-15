@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCartStore } from '@/stores/cartStore'
+import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
 import Header from '@/components/Header'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import { toast } from '@/hooks/use-toast'
 
 const CartPage = () => {
   const { items, updateQuantity, removeItem, getSubtotal } = useCartStore()
+  const { user } = useAuthStore()
   const [minimumOrderValue, setMinimumOrderValue] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
@@ -54,8 +56,13 @@ const CartPage = () => {
       })
       return
     }
-    // Navigate to delivery location selection page
-    navigate('/select-delivery-location')
+    
+    // Navigate based on user login status
+    if (user) {
+      navigate('/select-address')
+    } else {
+      navigate('/set-delivery-location')
+    }
   }
 
   if (isLoading) {
@@ -189,13 +196,6 @@ const CartPage = () => {
                 <span>₹{subtotal.toFixed(2)}</span>
               </div>
               
-              {minimumOrderValue > 0 && (
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>Minimum Order Value:</span>
-                  <span>₹{minimumOrderValue.toFixed(2)}</span>
-                </div>
-              )}
-              
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between text-lg font-semibold">
                   <span>Subtotal:</span>
@@ -223,6 +223,7 @@ const CartPage = () => {
               onClick={handleProceedToCheckout}
               disabled={!canProceedToCheckout}
               className="w-full mt-6"
+              style={{ backgroundColor: '#23b14d' }}
               size="lg"
             >
               Proceed to Checkout

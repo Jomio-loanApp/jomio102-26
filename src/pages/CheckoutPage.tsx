@@ -45,6 +45,8 @@ const CheckoutPage = () => {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [optionsError, setOptionsError] = useState<string | null>(null)
 
+  const [orderError, setOrderError] = useState<string | null>(null);
+
   useEffect(() => {
     // Redirect if no items or location
     if (items.length === 0) {
@@ -150,6 +152,7 @@ const CheckoutPage = () => {
   }
 
   const handlePlaceOrder = async () => {
+    setOrderError(null);
     // Validation
     if (!customerName.trim() || !customerPhone.trim()) {
       toast({
@@ -178,19 +181,10 @@ const CheckoutPage = () => {
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, ''))
       }));
 
-      const orderData = {
-        p_name: customerName,
-        p_phone: customerPhone,
-        p_delivery_lat: deliveryLat,
-        p_delivery_lon: deliveryLng,
-        p_delivery_location_name: deliveryLocationName,
-        p_delivery_type: selectedDeliveryOption,
-        p_cart,
-      };
-
-      let result;
+      // Everything in correct backend format for each function
       if (user) {
-        result = await supabase.functions.invoke("create-authenticated-order", {
+        // Auth user: create-authenticated-order
+        const { data, error } = await supabase.functions.invoke("create-authenticated-order", {
           body: {
             p_delivery_lat: deliveryLat,
             p_delivery_lon: deliveryLng,
@@ -198,42 +192,48 @@ const CheckoutPage = () => {
             p_delivery_type: selectedDeliveryOption,
             p_cart,
             p_customer_notes: customerNotes || null,
-          }
+          },
         });
+        if (error || !data?.order_id) {
+          throw new Error(error?.message || "Order placement failed.");
+        }
+        clearCart();
+        navigate(`/order-confirmation/${data.order_id}`);
       } else {
-        result = await supabase.functions.invoke("create-guest-order", {
-          body: orderData
+        // Guest: create-guest-order, also map names as required by backend
+        const guestOrderBody = {
+          p_name: customerName,
+          p_phone: customerPhone,
+          p_delivery_lat: deliveryLat,
+          p_delivery_lon: deliveryLng,
+          p_delivery_location_name: deliveryLocationName,
+          p_delivery_type: selectedDeliveryOption,
+          p_cart,
+        };
+        const { data, error } = await supabase.functions.invoke("create-guest-order", {
+          body: guestOrderBody,
         });
+        if (error || !data?.order_id) {
+          throw new Error(error?.message || "Order placement failed.");
+        }
+        clearCart();
+        navigate(`/order-confirmation/${data.order_id}`);
       }
-
-      if (result.error || !result.data?.order_id) {
-        toast({
-          title: "Order Failed",
-          description: result.error?.message || "Failed to place order. Please check your details and try again.",
-          variant: "destructive",
-        });
-        setIsPlacingOrder(false)
-        return
-      }
-
-      clearCart()
-      const orderId = result.data?.order_id || 'unknown'
-      navigate(`/order-confirmation/${orderId}`)
       toast({
         title: "Order Placed Successfully!",
         description: "You will receive a confirmation shortly.",
-      })
-
-    } catch (error) {
+      });
+    } catch (error: any) {
+      setOrderError("Order placement failed. Please review your details and try again.");
       toast({
         title: "Order Failed",
-        description: "Failed to place order. Please check your details and try again.",
+        description: error?.message || "Order placement failed. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
       setIsPlacingOrder(false)
     }
-  }
+  };
 
   const subtotal = getSubtotal()
   const total = subtotal + deliveryCharge
@@ -457,6 +457,12 @@ const CheckoutPage = () => {
                 </CardContent>
               </Card>
 
+              {/* Place Order Error Feedback */}
+              {orderError && (
+                <div className="w-full p-3 rounded bg-red-100 text-red-700 mb-2 text-center text-sm">
+                  {orderError}
+                </div>
+              )}
               {/* Place Order Button */}
               <Button
                 onClick={handlePlaceOrder}

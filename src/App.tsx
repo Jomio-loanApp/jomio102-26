@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -14,9 +15,9 @@ import AddressManagementPage from '@/pages/AddressManagementPage'
 import DeliveryLocationPage from '@/pages/DeliveryLocationPage'
 import SelectAddressPage from '@/pages/SelectAddressPage'
 import CheckoutPage from '@/pages/CheckoutPage'
-import OrderConfirmationPage from '@/pages/OrderConfirmationPage'
+import OrderSuccessPage from '@/pages/OrderSuccessPage'
+import OrderFailurePage from '@/pages/OrderFailurePage'
 import NotFound from '@/pages/NotFound'
-
 import SearchResultsPage from "@/pages/SearchResultsPage"
 
 function App() {
@@ -62,9 +63,12 @@ function App() {
         />
         <Route path="/set-delivery-location" element={<DeliveryLocationPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
-        <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
+        
+        {/* Order confirmation routes */}
+        <Route path="/order-confirmation/success/:orderId" element={<OrderSuccessPage />} />
+        <Route path="/order-confirmation/failure" element={<OrderFailurePage />} />
 
-        {/* SEARCH ROUTE */}
+        {/* Search route */}
         <Route path="/search" element={<SearchResultsPage />} />
         
         {/* Fallback */}

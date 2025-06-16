@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -29,7 +30,7 @@ const CheckoutPage = () => {
   const { items, getSubtotal, clearCart } = useCartStore()
   const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
 
-  // Form states - NO DEFAULT DELIVERY OPTION
+  // Form states
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('')
@@ -44,8 +45,7 @@ const CheckoutPage = () => {
   const [isLoadingOptions, setIsLoadingOptions] = useState(false)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [optionsError, setOptionsError] = useState<string | null>(null)
-
-  const [orderError, setOrderError] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null)
 
   useEffect(() => {
     // Redirect if no items or location
@@ -69,7 +69,6 @@ const CheckoutPage = () => {
   }, [items.length, deliveryLat, deliveryLng, user, profile, navigate])
 
   useEffect(() => {
-    // Only calculate delivery charge when instant delivery is selected
     if (selectedDeliveryOption === 'instant' && deliveryLat && deliveryLng) {
       calculateDeliveryCharge()
     } else {
@@ -152,7 +151,7 @@ const CheckoutPage = () => {
   }
 
   const handlePlaceOrder = async () => {
-    setOrderError(null);
+    setOrderError(null)
 
     // Validation
     if (!customerName.trim() || !customerPhone.trim()) {
@@ -160,8 +159,8 @@ const CheckoutPage = () => {
         title: "Missing Information",
         description: "Please fill in your name and phone number.",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
 
     if (!selectedDeliveryOption) {
@@ -169,74 +168,89 @@ const CheckoutPage = () => {
         title: "Select Delivery Option",
         description: "Please choose a delivery option to continue.",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
 
-    setIsPlacingOrder(true);
+    setIsPlacingOrder(true)
 
     try {
+      // Prepare cart data
       const p_cart = items.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
-      }));
+      }))
 
-      let orderData, error;
+      let orderData, error
+
       if (user) {
         // Authenticated user: create-authenticated-order
+        const payload = {
+          p_delivery_lat: deliveryLat,
+          p_delivery_lon: deliveryLng,
+          p_delivery_location_name: deliveryLocationName,
+          p_delivery_type: selectedDeliveryOption,
+          p_cart,
+          p_customer_notes: customerNotes || null,
+        }
+
+        console.log('Creating authenticated order with payload:', payload)
         const response = await supabase.functions.invoke("create-authenticated-order", {
-          body: {
-            p_delivery_lat: deliveryLat,
-            p_delivery_lon: deliveryLng,
-            p_delivery_location_name: deliveryLocationName,
-            p_delivery_type: selectedDeliveryOption,
-            p_cart,
-            p_customer_notes: customerNotes || null,
-          },
-        });
-        orderData = response.data;
-        error = response.error;
+          body: payload,
+        })
+        orderData = response.data
+        error = response.error
       } else {
         // Guest user: create-guest-order
+        const payload = {
+          p_name: customerName,
+          p_phone: customerPhone,
+          p_delivery_lat: deliveryLat,
+          p_delivery_lon: deliveryLng,
+          p_delivery_location_name: deliveryLocationName,
+          p_delivery_type: selectedDeliveryOption,
+          p_cart,
+        }
+
+        console.log('Creating guest order with payload:', payload)
         const response = await supabase.functions.invoke("create-guest-order", {
-          body: {
-            p_name: customerName,
-            p_phone: customerPhone,
-            p_delivery_lat: deliveryLat,
-            p_delivery_lon: deliveryLng,
-            p_delivery_location_name: deliveryLocationName,
-            p_delivery_type: selectedDeliveryOption,
-            p_cart,
-          },
-        });
-        orderData = response.data;
-        error = response.error;
+          body: payload,
+        })
+        orderData = response.data
+        error = response.error
       }
 
       // Check for API-reported errors
       if (error || !orderData?.order_id) {
-        throw new Error(error?.message || "Order placement failed.");
+        throw new Error(error?.message || "Order placement failed.")
       }
 
-      clearCart();
-      navigate(`/order-confirmation/${orderData.order_id}`);
+      console.log('Order created successfully:', orderData)
+      
+      // Clear cart and navigate to confirmation
+      clearCart()
+      navigate(`/order-confirmation/${orderData.order_id}`)
+      
+      toast({
+        title: "Order placed successfully!",
+        description: "Thank you for your order. You will receive updates soon.",
+      })
     } catch (error: any) {
-      setOrderError("Order placement failed. Please check your details and try again.");
+      console.error('Order placement error:', error)
+      setOrderError("Order placement failed. Please check your details and try again.")
       toast({
         title: "Order Failed",
         description: error?.message || "Order placement failed. Please try again.",
         variant: "destructive",
-      });
+      })
     } finally {
-      setIsPlacingOrder(false);
+      setIsPlacingOrder(false)
     }
-  };
+  }
 
   const subtotal = getSubtotal()
   const total = subtotal + deliveryCharge
-
-  // Check if minimum order value is met
   const isMinimumOrderMet = subtotal >= minimumOrderValue
 
   return (
@@ -455,12 +469,16 @@ const CheckoutPage = () => {
                 </CardContent>
               </Card>
 
-              {/* Place Order Error Feedback */}
+              {/* Order Error */}
               {orderError && (
-                <div className="w-full p-3 rounded bg-red-100 text-red-700 mb-2 text-center text-sm">
-                  {orderError}
-                </div>
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800">
+                    {orderError}
+                  </AlertDescription>
+                </Alert>
               )}
+
               {/* Place Order Button */}
               <Button
                 onClick={handlePlaceOrder}

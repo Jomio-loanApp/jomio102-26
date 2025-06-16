@@ -1,77 +1,38 @@
-import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuthStore } from '@/stores/authStore'
-import SplashScreen from '@/components/SplashScreen'
-import BottomNavigation from '@/components/BottomNavigation'
+import React from 'react'
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
+import { Toaster } from '@/hooks/use-toast'
 import HomePage from '@/pages/HomePage'
+import CategoryPage from '@/pages/CategoryPage'
 import CartPage from '@/pages/CartPage'
-import WishlistPage from '@/pages/WishlistPage'
 import ProfilePage from '@/pages/ProfilePage'
-import ProfileEditPage from '@/pages/ProfileEditPage'
-import OrderHistoryPage from '@/pages/OrderHistoryPage'
-import AddressesPage from '@/pages/AddressesPage'
-import AddressManagementPage from '@/pages/AddressManagementPage'
+import WishlistPage from '@/pages/WishlistPage'
+import AboutPage from '@/pages/AboutPage'
+import ContactPage from '@/pages/ContactPage'
 import DeliveryLocationPage from '@/pages/DeliveryLocationPage'
-import SelectAddressPage from '@/pages/SelectAddressPage'
 import CheckoutPage from '@/pages/CheckoutPage'
 import OrderConfirmationPage from '@/pages/OrderConfirmationPage'
-import NotFound from '@/pages/NotFound'
-
-import SearchResultsPage from "@/pages/SearchResultsPage"
+import OrderHistoryPage from '@/pages/OrderHistoryPage'
+import SearchResultsPage from '@/pages/SearchResultsPage'
 
 function App() {
-  const { initialize, isInitialized, user } = useAuthStore()
-
-  useEffect(() => {
-    initialize()
-  }, [initialize])
-
-  if (!isInitialized) {
-    return <SplashScreen />
-  }
-
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/cart" element={<CartPage />} />
-        <Route path="/wishlist" element={<WishlistPage />} />
-        
-        {/* Authentication-gated routes */}
-        <Route 
-          path="/profile" 
-          element={<ProfilePage />} 
-        />
-        <Route 
-          path="/profile/edit" 
-          element={<ProfileEditPage />} 
-        />
-        <Route 
-          path="/profile/orders" 
-          element={<OrderHistoryPage />} 
-        />
-        <Route 
-          path="/profile/addresses" 
-          element={<AddressManagementPage />} 
-        />
-
-        {/* Checkout flow routes */}
-        <Route 
-          path="/select-address" 
-          element={user ? <SelectAddressPage /> : <Navigate to="/set-delivery-location" />} 
-        />
-        <Route path="/set-delivery-location" element={<DeliveryLocationPage />} />
-        <Route path="/checkout" element={<CheckoutPage />} />
-        <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
-
-        {/* SEARCH ROUTE */}
         <Route path="/search" element={<SearchResultsPage />} />
-        
-        {/* Fallback */}
-        <Route path="*" element={<NotFound />} />
+        <Route path="/category/:categoryId" element={<CategoryPage />} />
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/select-address" element={<DeliveryLocationPage />} />
+        <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile/orders" element={<OrderHistoryPage />} />
+        <Route path="/wishlist" element={<WishlistPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
       </Routes>
-      <BottomNavigation />
-    </BrowserRouter>
+      <Toaster />
+    </Router>
   )
 }
 

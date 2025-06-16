@@ -4,8 +4,8 @@ import { useHomeStore } from '@/stores/homeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useDebounce } from '@/hooks/useDebounce'
 
 const MIN_SEARCH_LENGTH = 2
 
@@ -28,8 +28,6 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
 
   const cartItemCount = getItemCount()
   const [localQuery, setLocalQuery] = useState('')
-  const debouncedTerm = useDebounce(localQuery, 400)
-  const lastQueried = useRef('')
 
   // Keep input synced with URL q param
   useEffect(() => {
@@ -48,11 +46,10 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [setHeaderSticky, setShowHeaderText])
 
-  // Only trigger search on Enter submission
+  // Search on Enter or button click
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = localQuery.trim()
-    // Only search if query is long enough
     if (trimmed.length >= MIN_SEARCH_LENGTH) {
       navigate(`/search?q=${encodeURIComponent(trimmed)}`)
     }
@@ -112,9 +109,19 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
                 placeholder="Search for products..."
                 value={localQuery}
                 onChange={e => setLocalQuery(e.target.value)}
-                className="pl-10 pr-4 py-3 w-full bg-white rounded-full border-2 border-gray-200 focus:border-green-500 transition-colors"
+                className="pl-10 pr-12 py-3 w-full bg-white rounded-full border-2 border-gray-200 focus:border-green-500 transition-colors"
                 minLength={MIN_SEARCH_LENGTH}
               />
+              {localQuery && (
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-10 w-10 p-0 rounded-full"
+                  disabled={localQuery.trim().length < MIN_SEARCH_LENGTH}
+                >
+                  <Search className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </form>
           {/* Cart Button */}

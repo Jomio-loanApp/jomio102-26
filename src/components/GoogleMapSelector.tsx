@@ -12,7 +12,6 @@ interface GoogleMapSelectorProps {
 const GOOGLE_MAPS_API_KEY = "AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q";
 
 const loadGoogleMaps = (callback: () => void) => {
-  // Do not load the script twice
   if (window.google && window.google.maps) {
     callback();
     return;
@@ -59,7 +58,6 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
         zoomControl: true,
       });
 
-      // Create one marker, hidden (we will use pin overlay instead)
       // Add search box
       if (autocompleteRef.current) {
         // @ts-ignore
@@ -77,10 +75,9 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
 
       let timeout: NodeJS.Timeout;
 
-      // Center pin: use the center of the map, not a marker
+      // Fixed pin interaction: read center when map stops moving
       map.addListener("idle", () => {
         clearTimeout(timeout);
-        // Debounce to avoid too-rapid API calls.
         timeout = setTimeout(() => {
           const center = map.getCenter();
           if (center) {
@@ -91,16 +88,13 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
         }, 250);
       });
 
-      // Initial address lookup
       handlePositionChange(initialLat, initialLng);
       setIsReady(true);
     });
 
-    // Cleanup on unmount.
     return () => {
       setIsReady(false);
     };
-    // eslint-disable-next-line
   }, []);
 
   const handlePositionChange = async (lat: number, lng: number) => {

@@ -26,7 +26,6 @@ const OrderHistoryPage = () => {
       return;
     }
     fetchOrders(1, true);
-    // eslint-disable-next-line
   }, [user]);
 
   const fetchOrders = async (pageNum: number, replace: boolean = false) => {
@@ -35,8 +34,7 @@ const OrderHistoryPage = () => {
     try {
       const from = (pageNum - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      // FIX: Do NOT manually add offset/limit as params! Only use .range (this will fix the 400 error!)
-      // And ensure we use only column names that exist in your backend
+      
       const { data, error } = await supabase
         .from("orders")
         .select("id, ordered_at, status, total_amount")
@@ -138,7 +136,6 @@ const OrderHistoryPage = () => {
   );
 };
 
-// Status color helper
 function getStatusColor(status: string) {
   switch (status?.toLowerCase()) {
     case "placed":

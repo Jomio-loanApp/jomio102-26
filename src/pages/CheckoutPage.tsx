@@ -45,7 +45,6 @@ const CheckoutPage = () => {
   const [isLoadingOptions, setIsLoadingOptions] = useState(false)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [optionsError, setOptionsError] = useState<string | null>(null)
-  const [orderError, setOrderError] = useState<string | null>(null)
 
   useEffect(() => {
     // Redirect if no items or location
@@ -114,8 +113,8 @@ const CheckoutPage = () => {
         throw response.error
       }
       
-      // The response.data should be an array of delivery options
-      if (Array.isArray(response.data)) {
+      // Check if we have valid data
+      if (response.data && Array.isArray(response.data)) {
         setDeliveryOptions(response.data)
         console.log('Delivery options loaded successfully:', response.data)
       } else {
@@ -159,7 +158,6 @@ const CheckoutPage = () => {
   }
 
   const handlePlaceOrder = async () => {
-    setOrderError(null)
     setIsPlacingOrder(true)
 
     try {
@@ -256,7 +254,8 @@ const CheckoutPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Header showSearch={false} />
       
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
+      {/* Desktop-constrained container */}
+      <div className="w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center space-x-3">
@@ -467,16 +466,6 @@ const CheckoutPage = () => {
                   <p className="text-sm text-gray-600">Cash on Delivery</p>
                 </CardContent>
               </Card>
-
-              {/* Order Error Display */}
-              {orderError && (
-                <Alert className="border-red-200 bg-red-50">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-800">
-                    {orderError}
-                  </AlertDescription>
-                </Alert>
-              )}
 
               {/* Place Order Button */}
               <Button

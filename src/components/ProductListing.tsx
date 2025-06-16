@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ProductCard from './ProductCard'
@@ -18,11 +19,6 @@ interface Product {
   category_id: string | null
   availability_status: string
   is_active: boolean
-}
-
-interface Tag {
-  tag_id: string
-  name: string
 }
 
 interface ProductListingProps {
@@ -116,7 +112,8 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
         <div className="flex justify-between items-center">
           <Skeleton className="h-4 w-48" />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {/* Responsive skeleton grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {[...Array(8)].map((_, index) => (
             <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
               <Skeleton className="aspect-square w-full" />
@@ -180,7 +177,8 @@ const ProductListing = ({ categoryId, searchQuery }: ProductListingProps) => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {/* Responsive product grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {products.map((product) => (
             <ProductCard 
               key={product.product_id} 

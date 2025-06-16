@@ -6,7 +6,8 @@ import { useAuthStore } from "@/stores/authStore";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Loader2, Receipt, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 
 const PAGE_SIZE = 10;
 
@@ -15,6 +16,15 @@ interface Order {
   ordered_at: string
   status: string
   total_amount: number
+  delivery_location_name: string
+}
+
+interface OrderItem {
+  id: string
+  product_name_at_purchase: string
+  quantity: number
+  price_at_purchase: number
+  product_image_at_purchase: string | null
 }
 
 const OrderHistoryPage = () => {
@@ -27,6 +37,12 @@ const OrderHistoryPage = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  
+  // Order details modal states
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -48,7 +64,7 @@ const OrderHistoryPage = () => {
       
       const { data, error, count } = await supabase
         .from("orders")
-        .select("order_id, ordered_at, status, total_amount", { count: 'exact' })
+        .select("order_id, ordered_at, status, total_amount, delivery_location_name", { count: 'exact' })
         .eq("customer_profile_id", user?.id)
         .order("ordered_at", { ascending: false })
         .range(from, to);
@@ -77,10 +93,35 @@ const OrderHistoryPage = () => {
     }
   };
 
-  const handleLoadMore = () => {
-    if (!isLoading && hasMore) {
-      fetchOrders(currentPage + 1);
+  const fetchOrderItems = async (orderId: number) => {
+    setIsLoadingItems(true);
+    try {
+      console.log('Fetching items for order:', orderId);
+      
+      const { data, error } = await supabase
+        .from("order_items")
+        .select("*")
+        .eq("order_id", orderId);
+
+      if (error) {
+        console.error('Order items fetch error:', error);
+        throw error;
+      }
+
+      console.log('Order items fetched:', data);
+      setOrderItems(data || []);
+    } catch (err: any) {
+      console.error('Error fetching order items:', err);
+      setOrderItems([]);
+    } finally {
+      setIsLoadingItems(false);
     }
+  };
+
+  const handleViewDetails = (orderId: number) => {
+    setSelectedOrderId(orderId);
+    setIsModalOpen(true);
+    fetchOrderItems(orderId);
   };
 
   const handlePreviousPage = () => {
@@ -133,7 +174,8 @@ const OrderHistoryPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Header showSearch={false} />
       
-      <div className="max-w-4xl mx-auto px-4 py-8 pb-20">
+      {/* Desktop-constrained container */}
+      <div className="w-full max-w-screen-xl mx-auto px-4 py-8 pb-20">
         <div className="flex items-center space-x-3 mb-6">
           <Button
             variant="ghost"
@@ -178,11 +220,7 @@ const OrderHistoryPage = () => {
             {/* Orders List */}
             <div className="space-y-4 mb-6">
               {orders.map((order) => (
-                <Card 
-                  key={order.order_id} 
-                  className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/order-confirmation/success/${order.order_id}`)}
-                >
+                <Card key={order.order_id} className="p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-4 mb-2">
@@ -193,22 +231,23 @@ const OrderHistoryPage = () => {
                           {order.status.replace(/_/g, " ").toUpperCase()}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 mb-1">
                         Ordered on {formatDate(order.ordered_at)}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Delivery to: {order.delivery_location_name}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl font-bold text-green-600">
+                      <p className="text-xl font-bold text-green-600 mb-2">
                         ₹{order.total_amount?.toFixed(2)}
                       </p>
                       <Button 
                         size="sm" 
                         variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/order-confirmation/success/${order.order_id}`);
-                        }}
+                        onClick={() => handleViewDetails(order.order_id)}
                       >
+                        <Eye className="w-4 h-4 mr-1" />
                         View Details
                       </Button>
                     </div>
@@ -260,6 +299,58 @@ const OrderHistoryPage = () => {
             )}
           </>
         )}
+
+        {/* Order Details Modal */}
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Order Details #{selectedOrderId?.toString().slice(-6).toUpperCase()}
+              </DialogTitle>
+            </DialogHeader>
+            
+            {isLoadingItems ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                <span className="ml-2">Loading order items...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {orderItems.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">No items found for this order.</p>
+                ) : (
+                  orderItems.map((item) => (
+                    <div key={item.id} className="flex items-center space-x-3 p-3 border rounded-lg">
+                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                        {item.product_image_at_purchase ? (
+                          <img
+                            src={item.product_image_at_purchase}
+                            alt={item.product_name_at_purchase}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <span>📦</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">{item.product_name_at_purchase}</h4>
+                        <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
+                        <p className="text-sm text-gray-600">Price: ₹{item.price_at_purchase.toFixed(2)} each</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-green-600">
+                          ₹{(item.price_at_purchase * item.quantity).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

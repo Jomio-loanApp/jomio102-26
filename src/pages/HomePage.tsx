@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { useHomeStore } from '@/stores/homeStore'
 import DynamicHeader from '@/components/DynamicHeader'
@@ -94,26 +95,31 @@ const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Full-width header background */}
       <div 
-        className="relative"
+        className="relative w-full"
         style={getHeaderStyle()}
       >
-        {/* Dynamic Header */}
-        <DynamicHeader
-          onProfileClick={handleProfileClick}
-        />
+        {/* Desktop-constrained header content */}
+        <div className="w-full max-w-screen-xl mx-auto">
+          <DynamicHeader
+            onProfileClick={handleProfileClick}
+          />
 
-        {/* Category Scroller - Inside the background area */}
-        <div className={isHeaderSticky ? 'mb-32' : ''}>
-          <CategoryScroller />
+          {/* Category Scroller - Inside the background area but constrained */}
+          <div className={isHeaderSticky ? 'mb-32' : ''}>
+            <CategoryScroller />
+          </div>
         </div>
       </div>
 
+      {/* Full-width banner strip */}
       <BannerStrip />
 
-      <main className="relative">
+      {/* Desktop-constrained main content */}
+      <main className="relative w-full max-w-screen-xl mx-auto px-4">
         {searchQuery ? (
-          <div className="px-4 py-6">
+          <div className="py-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               Search Results for "{searchQuery}"
             </h2>

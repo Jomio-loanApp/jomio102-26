@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react'
 import { Search, User, ShoppingCart, X } from 'lucide-react'
 import { useHomeStore } from '@/stores/homeStore'
@@ -87,12 +88,13 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
       `}
       style={!isHeaderSticky ? getHeaderStyle() : {}}
     >
-      <div className="px-4 py-4">
+      {/* Desktop-constrained content */}
+      <div className={`${isHeaderSticky ? 'w-full max-w-screen-xl mx-auto' : ''} px-4 py-4`}>
         {/* Store Title - Hide when scrolled */}
         {showHeaderText && !isHeaderSticky && (
           <div className="text-center mb-4">
             <h1
-              className="text-3xl font-bold cursor-pointer transition-opacity duration-300"
+              className="text-2xl sm:text-3xl font-bold cursor-pointer transition-opacity duration-300"
               style={{
                 color: headerBackground?.background_image_url ? 'white' : '#059669',
                 textShadow: headerBackground?.background_image_url ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'

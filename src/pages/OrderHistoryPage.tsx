@@ -11,7 +11,7 @@ import { Loader2, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 const PAGE_SIZE = 10;
 
 interface Order {
-  id: string
+  order_id: string
   ordered_at: string
   status: string
   total_amount: number
@@ -48,7 +48,7 @@ const OrderHistoryPage = () => {
       
       const { data, error, count } = await supabase
         .from("orders")
-        .select("id, ordered_at, status, total_amount", { count: 'exact' })
+        .select("order_id, ordered_at, status, total_amount", { count: 'exact' })
         .eq("customer_profile_id", user?.id)
         .order("ordered_at", { ascending: false })
         .range(from, to);
@@ -179,15 +179,15 @@ const OrderHistoryPage = () => {
             <div className="space-y-4 mb-6">
               {orders.map((order) => (
                 <Card 
-                  key={order.id} 
+                  key={order.order_id} 
                   className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/order-confirmation/${order.id}`)}
+                  onClick={() => navigate(`/order-confirmation/success/${order.order_id}`)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-4 mb-2">
                         <h3 className="font-semibold text-lg">
-                          Order #{order.id.slice(-6).toUpperCase()}
+                          Order #{order.order_id.slice(-6).toUpperCase()}
                         </h3>
                         <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium ${getStatusColor(order.status)}`}>
                           {order.status.replace(/_/g, " ").toUpperCase()}
@@ -206,7 +206,7 @@ const OrderHistoryPage = () => {
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/order-confirmation/${order.id}`);
+                          navigate(`/order-confirmation/success/${order.order_id}`);
                         }}
                       >
                         View Details

@@ -108,17 +108,24 @@ const CheckoutPage = () => {
       setOptionsError(null)
       console.log('Fetching delivery options...')
       
-      const { data, error } = await supabase.functions.invoke('get-available-delivery-options')
+      const response = await supabase.functions.invoke('get-available-delivery-options')
       
-      if (error) throw error
+      if (response.error) {
+        throw response.error
+      }
       
-      setDeliveryOptions(data || [])
-      console.log('Delivery options loaded:', data)
+      // The response.data should be an array of delivery options
+      if (Array.isArray(response.data)) {
+        setDeliveryOptions(response.data)
+        console.log('Delivery options loaded successfully:', response.data)
+      } else {
+        throw new Error('Invalid response format from delivery options API')
+      }
     } catch (error) {
       console.error('Error fetching delivery options:', error)
       setOptionsError('Unable to load delivery options from server. Using defaults.')
       
-      // Fallback options
+      // Fallback options only when API fails
       const fallbackOptions = [
         { type: 'instant', label: 'Instant Delivery (30-45 min)', charge: 0 },
         { type: 'morning', label: 'Morning Delivery (Tomorrow 7 AM - 9 AM)', charge: 0 },
@@ -176,10 +183,12 @@ const CheckoutPage = () => {
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
       }))
 
+      let payload
       let response
+
       if (user) {
         // Authenticated user order
-        const payload = {
+        payload = {
           p_delivery_lat: deliveryLat,
           p_delivery_lon: deliveryLng,
           p_delivery_location_name: deliveryLocationName,
@@ -188,13 +197,13 @@ const CheckoutPage = () => {
           p_customer_notes: customerNotes || null,
         }
         
-        console.log('Creating authenticated order with payload:', payload)
+        console.log('Placing order with payload:', payload)
         response = await supabase.functions.invoke("create-authenticated-order", {
           body: payload
         })
       } else {
         // Guest user order
-        const payload = {
+        payload = {
           p_name: customerName,
           p_phone: customerPhone,
           p_delivery_lat: deliveryLat,
@@ -204,7 +213,7 @@ const CheckoutPage = () => {
           p_cart: p_cart,
         }
         
-        console.log('Creating guest order with payload:', payload)
+        console.log('Placing order with payload:', payload)
         response = await supabase.functions.invoke("create-guest-order", {
           body: payload
         })
@@ -218,14 +227,16 @@ const CheckoutPage = () => {
         throw new Error("Order placement failed - no order ID returned.")
       }
 
-      // Success: clear cart and navigate to confirmation
+      // Success: clear cart and navigate to success page
       console.log('Order placed successfully:', response.data)
       clearCart()
-      navigate(`/order-confirmation/${response.data.order_id}`)
+      navigate(`/order-confirmation/success/${response.data.order_id}`)
 
     } catch (error: any) {
       console.error('Order placement error:', error)
-      setOrderError(error.message || "Order placement failed. Please check your details and try again.")
+      
+      // Navigate to failure page on any error
+      navigate('/order-confirmation/failure')
       
       toast({
         title: "Order Failed",

@@ -20,15 +20,16 @@ const Header = ({ showSearch = true }: HeaderProps) => {
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
   const location = useLocation()
+  // Remove debouncedQuery and all useDebounce usage
 
-  // Keep search bar populated from URL q param
+  // Keep search bar populated from URL q param, but do NOT auto-search
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const urlQ = params.get('q') || ''
     setSearchQuery(urlQ)
   }, [location.pathname, location.search])
 
-  // Search on Enter key or search button click
+  // Only trigger search on Enter
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = searchQuery.trim()
@@ -62,19 +63,9 @@ const Header = ({ showSearch = true }: HeaderProps) => {
                       placeholder="Search products..."
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      className="pl-10 pr-12 py-2 w-full"
+                      className="pl-10 pr-4 py-2 w-full"
                       minLength={MIN_SEARCH_LENGTH}
                     />
-                    {searchQuery && (
-                      <Button
-                        type="submit"
-                        size="sm"
-                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                        disabled={searchQuery.trim().length < MIN_SEARCH_LENGTH}
-                      >
-                        <Search className="w-4 h-4" />
-                      </Button>
-                    )}
                   </div>
                 </form>
               </div>
@@ -129,19 +120,9 @@ const Header = ({ showSearch = true }: HeaderProps) => {
                     placeholder="Search products..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="pl-10 pr-12 py-2 w-full"
+                    className="pl-10 pr-4 py-2 w-full"
                     minLength={MIN_SEARCH_LENGTH}
                   />
-                  {searchQuery && (
-                    <Button
-                      type="submit"
-                      size="sm"
-                      className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                      disabled={searchQuery.trim().length < MIN_SEARCH_LENGTH}
-                    >
-                      <Search className="w-4 h-4" />
-                    </Button>
-                  )}
                 </div>
               </form>
             </div>

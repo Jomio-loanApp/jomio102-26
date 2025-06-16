@@ -1,6 +1,7 @@
+
 import React from 'react'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
-import { Toaster } from '@/hooks/use-toast'
+import { Toaster } from '@/components/ui/toaster'
 import HomePage from '@/pages/HomePage'
 import CategoryPage from '@/pages/CategoryPage'
 import CartPage from '@/pages/CartPage'

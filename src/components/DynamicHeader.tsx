@@ -1,13 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Search, User, ShoppingCart } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Search, User, ShoppingCart, X } from 'lucide-react'
 import { useHomeStore } from '@/stores/homeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useDebounce } from '@/hooks/useDebounce'
-
-const MIN_SEARCH_LENGTH = 2
 
 interface DynamicHeaderProps {
   onProfileClick?: () => void
@@ -28,8 +26,6 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
 
   const cartItemCount = getItemCount()
   const [localQuery, setLocalQuery] = useState('')
-  const debouncedTerm = useDebounce(localQuery, 400)
-  const lastQueried = useRef('')
 
   // Keep input synced with URL q param
   useEffect(() => {
@@ -48,14 +44,21 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [setHeaderSticky, setShowHeaderText])
 
-  // Only trigger search on Enter submission
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
+  // Manual search trigger - only on Enter or button click
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     const trimmed = localQuery.trim()
-    // Only search if query is long enough
-    if (trimmed.length >= MIN_SEARCH_LENGTH) {
+    if (trimmed.length >= 2) {
       navigate(`/search?q=${encodeURIComponent(trimmed)}`)
     }
+  }
+
+  const handleSearchButtonClick = () => {
+    handleSearch()
+  }
+
+  const clearSearch = () => {
+    setLocalQuery('')
   }
 
   const getHeaderStyle = () => {
@@ -100,6 +103,7 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
             </h1>
           </div>
         )}
+        
         {/* Search Bar and Actions */}
         <div className="flex items-center gap-3">
           {/* Search Form */}
@@ -112,11 +116,34 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
                 placeholder="Search for products..."
                 value={localQuery}
                 onChange={e => setLocalQuery(e.target.value)}
-                className="pl-10 pr-4 py-3 w-full bg-white rounded-full border-2 border-gray-200 focus:border-green-500 transition-colors"
-                minLength={MIN_SEARCH_LENGTH}
+                className="pl-10 pr-20 py-3 w-full bg-white rounded-full border-2 border-gray-200 focus:border-green-500 transition-colors"
               />
+              
+              {/* Search and Clear buttons */}
+              {localQuery.trim().length > 0 && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={clearSearch}
+                    className="p-1 h-7 w-7 hover:bg-gray-100 rounded-full"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSearchButtonClick}
+                    className="p-1 h-7 w-7 bg-green-600 hover:bg-green-700 text-white rounded-full"
+                  >
+                    <Search className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </form>
+          
           {/* Cart Button */}
           <Link
             to="/cart"
@@ -129,6 +156,7 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
               </span>
             )}
           </Link>
+          
           {/* User Button */}
           {user ? (
             <Link to="/profile" className="p-3 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow">

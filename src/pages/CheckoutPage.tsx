@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
@@ -29,7 +30,7 @@ const CheckoutPage = () => {
   const { items, getSubtotal, clearCart } = useCartStore()
   const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
 
-  // Form states - NO DEFAULT DELIVERY OPTION
+  // Form states
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('')
@@ -44,8 +45,7 @@ const CheckoutPage = () => {
   const [isLoadingOptions, setIsLoadingOptions] = useState(false)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [optionsError, setOptionsError] = useState<string | null>(null)
-
-  const [orderError, setOrderError] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null)
 
   useEffect(() => {
     // Redirect if no items or location
@@ -55,7 +55,7 @@ const CheckoutPage = () => {
     }
     
     if (!deliveryLat || !deliveryLng || !deliveryLocationName) {
-      navigate('/select-address')
+      navigate('/set-delivery-location')
       return
     }
     
@@ -69,7 +69,7 @@ const CheckoutPage = () => {
   }, [items.length, deliveryLat, deliveryLng, user, profile, navigate])
 
   useEffect(() => {
-    // Only calculate delivery charge when instant delivery is selected
+    // Calculate delivery charge for instant delivery
     if (selectedDeliveryOption === 'instant' && deliveryLat && deliveryLng) {
       calculateDeliveryCharge()
     } else {
@@ -152,91 +152,93 @@ const CheckoutPage = () => {
   }
 
   const handlePlaceOrder = async () => {
-    setOrderError(null);
-
-    // Validation
-    if (!customerName.trim() || !customerPhone.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in your name and phone number.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!selectedDeliveryOption) {
-      toast({
-        title: "Select Delivery Option",
-        description: "Please choose a delivery option to continue.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsPlacingOrder(true);
+    setOrderError(null)
+    setIsPlacingOrder(true)
 
     try {
+      // Validation
+      if (!customerName.trim() || !customerPhone.trim()) {
+        throw new Error("Please fill in your name and phone number.")
+      }
+
+      if (!selectedDeliveryOption) {
+        throw new Error("Please choose a delivery option to continue.")
+      }
+
+      if (!deliveryLat || !deliveryLng || !deliveryLocationName) {
+        throw new Error("Please select a delivery location.")
+      }
+
+      // Prepare cart data
       const p_cart = items.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
-      }));
+      }))
 
-      let orderData, error;
+      let response
       if (user) {
-        // Authenticated user: create-authenticated-order
-        const response = await supabase.functions.invoke("create-authenticated-order", {
-          body: {
-            p_delivery_lat: deliveryLat,
-            p_delivery_lon: deliveryLng,
-            p_delivery_location_name: deliveryLocationName,
-            p_delivery_type: selectedDeliveryOption,
-            p_cart,
-            p_customer_notes: customerNotes || null,
-          },
-        });
-        orderData = response.data;
-        error = response.error;
+        // Authenticated user order
+        const payload = {
+          p_delivery_lat: deliveryLat,
+          p_delivery_lon: deliveryLng,
+          p_delivery_location_name: deliveryLocationName,
+          p_delivery_type: selectedDeliveryOption,
+          p_cart: p_cart,
+          p_customer_notes: customerNotes || null,
+        }
+        
+        console.log('Creating authenticated order with payload:', payload)
+        response = await supabase.functions.invoke("create-authenticated-order", {
+          body: payload
+        })
       } else {
-        // Guest user: create-guest-order
-        const response = await supabase.functions.invoke("create-guest-order", {
-          body: {
-            p_name: customerName,
-            p_phone: customerPhone,
-            p_delivery_lat: deliveryLat,
-            p_delivery_lon: deliveryLng,
-            p_delivery_location_name: deliveryLocationName,
-            p_delivery_type: selectedDeliveryOption,
-            p_cart,
-          },
-        });
-        orderData = response.data;
-        error = response.error;
+        // Guest user order
+        const payload = {
+          p_name: customerName,
+          p_phone: customerPhone,
+          p_delivery_lat: deliveryLat,
+          p_delivery_lon: deliveryLng,
+          p_delivery_location_name: deliveryLocationName,
+          p_delivery_type: selectedDeliveryOption,
+          p_cart: p_cart,
+        }
+        
+        console.log('Creating guest order with payload:', payload)
+        response = await supabase.functions.invoke("create-guest-order", {
+          body: payload
+        })
       }
 
-      // Check for API-reported errors
-      if (error || !orderData?.order_id) {
-        throw new Error(error?.message || "Order placement failed.");
+      if (response.error) {
+        throw new Error(response.error.message || "Order placement failed.")
       }
 
-      clearCart();
-      navigate(`/order-confirmation/${orderData.order_id}`);
+      if (!response.data?.order_id) {
+        throw new Error("Order placement failed - no order ID returned.")
+      }
+
+      // Success: clear cart and navigate to confirmation
+      console.log('Order placed successfully:', response.data)
+      clearCart()
+      navigate(`/order-confirmation/${response.data.order_id}`)
+
     } catch (error: any) {
-      setOrderError("Order placement failed. Please check your details and try again.");
+      console.error('Order placement error:', error)
+      setOrderError(error.message || "Order placement failed. Please check your details and try again.")
+      
       toast({
         title: "Order Failed",
-        description: error?.message || "Order placement failed. Please try again.",
+        description: error.message || "Order placement failed. Please try again.",
         variant: "destructive",
-      });
+      })
     } finally {
-      setIsPlacingOrder(false);
+      setIsPlacingOrder(false)
     }
-  };
+  }
 
   const subtotal = getSubtotal()
   const total = subtotal + deliveryCharge
-
-  // Check if minimum order value is met
   const isMinimumOrderMet = subtotal >= minimumOrderValue
 
   return (
@@ -312,7 +314,7 @@ const CheckoutPage = () => {
                     variant="outline"
                     size="sm"
                     className="mt-2"
-                    onClick={() => navigate('/select-address')}
+                    onClick={() => navigate('/set-delivery-location')}
                   >
                     Change Address
                   </Button>
@@ -455,12 +457,16 @@ const CheckoutPage = () => {
                 </CardContent>
               </Card>
 
-              {/* Place Order Error Feedback */}
+              {/* Order Error Display */}
               {orderError && (
-                <div className="w-full p-3 rounded bg-red-100 text-red-700 mb-2 text-center text-sm">
-                  {orderError}
-                </div>
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800">
+                    {orderError}
+                  </AlertDescription>
+                </Alert>
               )}
+
               {/* Place Order Button */}
               <Button
                 onClick={handlePlaceOrder}

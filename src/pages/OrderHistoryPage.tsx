@@ -11,7 +11,7 @@ import { Loader2, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 const PAGE_SIZE = 10;
 
 interface Order {
-  order_id: string
+  order_id: number
   ordered_at: string
   status: string
   total_amount: number
@@ -187,7 +187,7 @@ const OrderHistoryPage = () => {
                     <div className="flex-1">
                       <div className="flex items-center space-x-4 mb-2">
                         <h3 className="font-semibold text-lg">
-                          Order #{order.order_id.slice(-6).toUpperCase()}
+                          Order #{order.order_id.toString().slice(-6).toUpperCase()}
                         </h3>
                         <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium ${getStatusColor(order.status)}`}>
                           {order.status.replace(/_/g, " ").toUpperCase()}

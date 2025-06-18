@@ -1,11 +1,10 @@
+
 import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "@/components/ProductCard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import IOSBackButton from "@/components/IOSBackButton";
 
 interface Product {
   product_id: string
@@ -33,7 +32,6 @@ const MIN_SEARCH_LENGTH = 2;
 
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const searchTerm = (searchParams.get("q") || "").trim();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -43,42 +41,47 @@ export default function SearchResultsPage() {
 
   // Fetch search products results
   useEffect(() => {
-    if (searchTerm.length < MIN_SEARCH_LENGTH) {
-      setSearchResults([]);
+    const fetchSearchResults = async () => {
+      if (searchTerm.length < MIN_SEARCH_LENGTH) {
+        setSearchResults([]);
+        setError(null);
+        return;
+      }
+      
+      setIsLoading(true);
       setError(null);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    
-    supabase
-      .rpc("search_products", { search_term: searchTerm })
-      .then(({ data, error }) => {
+      
+      try {
+        const { data, error } = await supabase.rpc("search_products", { search_term: searchTerm });
+        
         if (error) {
           setError("Could not fetch search results.");
           setSearchResults([]);
         } else {
           setSearchResults((data as Product[]) || []);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Search error:', err);
         setError("Could not fetch search results.");
         setSearchResults([]);
-      })
-      .finally(() => {
+      } finally {
         setIsLoading(false);
-      });
+      }
+    };
+
+    fetchSearchResults();
   }, [searchTerm]);
 
   // Fetch interspersed (dynamic) content for "search_results_interspersed_content"
   useEffect(() => {
-    supabase
-      .from("home_content_sections")
-      .select("*, section_items(*, products(*))")
-      .eq("display_context", "search_results_interspersed_content")
-      .order("display_order", { ascending: true })
-      .then(({ data, error }) => {
+    const fetchInterspersedContent = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("home_content_sections")
+          .select("*, section_items(*, products(*))")
+          .eq("display_context", "search_results_interspersed_content")
+          .order("display_order", { ascending: true });
+
         if (error) {
           console.error('Error fetching interspersed content:', error);
           setInterspersedContent([]);
@@ -88,7 +91,13 @@ export default function SearchResultsPage() {
             Array.isArray(section.section_items) && section.section_items.length > 0
           ));
         }
-      });
+      } catch (err) {
+        console.error('Error fetching interspersed content:', err);
+        setInterspersedContent([]);
+      }
+    };
+
+    fetchInterspersedContent();
   }, []);
 
   // Merge logic: intersperse content after every 6 products (can tune dynamically)
@@ -116,14 +125,7 @@ export default function SearchResultsPage() {
       <div className="bg-white shadow-sm sticky top-0 z-40">
         <div className="w-full max-w-screen-xl mx-auto px-4 py-4">
           <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(-1)}
-              className="p-2"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
+            <IOSBackButton fallbackRoute="/" previousPageTitle="Home" />
             <h1 className="text-xl font-semibold text-gray-900">Search Results</h1>
           </div>
         </div>

@@ -1,7 +1,6 @@
 
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { App as CapacitorApp } from '@capacitor/app'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
 import SplashScreen from '@/components/SplashScreen'
@@ -36,6 +35,9 @@ function AppWithRouter() {
   useEffect(() => {
     const setupBackButtonHandler = async () => {
       try {
+        // Dynamically import Capacitor to avoid build issues in web environment
+        const { App: CapacitorApp } = await import('@capacitor/app')
+        
         const backButtonListener = await CapacitorApp.addListener('backButton', () => {
           const currentPath = location.pathname
           

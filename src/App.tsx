@@ -1,6 +1,9 @@
+
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { App as CapacitorApp } from '@capacitor/app'
 import { useAuthStore } from '@/stores/authStore'
+import { supabase } from '@/lib/supabase'
 import SplashScreen from '@/components/SplashScreen'
 import BottomNavigation from '@/components/BottomNavigation'
 import HomePage from '@/pages/HomePage'
@@ -19,19 +22,76 @@ import OrderFailurePage from '@/pages/OrderFailurePage'
 import NotFound from '@/pages/NotFound'
 import SearchResultsPage from "@/pages/SearchResultsPage"
 
-function App() {
+// Component to handle Capacitor back button inside Router context
+function AppWithRouter() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const { initialize, isInitialized, user } = useAuthStore()
 
   useEffect(() => {
     initialize()
   }, [initialize])
 
+  // Capacitor back button handling
+  useEffect(() => {
+    const setupBackButtonHandler = async () => {
+      try {
+        const backButtonListener = await CapacitorApp.addListener('backButton', () => {
+          const currentPath = location.pathname
+          
+          // If on home page, exit app
+          if (currentPath === '/') {
+            CapacitorApp.exitApp()
+          } else {
+            // Navigate back one step
+            navigate(-1)
+          }
+        })
+
+        // Cleanup function
+        return () => {
+          backButtonListener.remove()
+        }
+      } catch (error) {
+        // Capacitor not available (web environment)
+        console.log('Capacitor not available, skipping back button handler')
+      }
+    }
+
+    const cleanup = setupBackButtonHandler()
+    
+    return () => {
+      cleanup.then(cleanupFn => cleanupFn && cleanupFn())
+    }
+  }, [navigate, location.pathname])
+
+  // Handle app visibility changes to prevent freezing
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          // Refresh the auth session to re-establish connection
+          await supabase.auth.getSession()
+          console.log('App became visible, refreshed Supabase connection')
+        } catch (error) {
+          console.error('Failed to refresh Supabase connection:', error)
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
   if (!isInitialized) {
     return <SplashScreen />
   }
 
   return (
-    <BrowserRouter>
+    <>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/cart" element={<CartPage />} />
@@ -74,6 +134,14 @@ function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       <BottomNavigation />
+    </>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppWithRouter />
     </BrowserRouter>
   )
 }

@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/authStore";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Receipt, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -62,6 +62,7 @@ const OrderHistoryPage = () => {
       
       console.log('Fetching orders for user:', user?.id, 'page:', pageNum);
       
+      // Fixed query to use correct column name order_id instead of id
       const { data, error, count } = await supabase
         .from("orders")
         .select("order_id, ordered_at, status, total_amount, delivery_location_name", { count: 'exact' })

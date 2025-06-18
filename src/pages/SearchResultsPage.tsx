@@ -3,6 +3,9 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "@/components/ProductCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 interface Product {
   product_id: string
@@ -30,6 +33,7 @@ const MIN_SEARCH_LENGTH = 2;
 
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const searchTerm = (searchParams.get("q") || "").trim();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +50,7 @@ export default function SearchResultsPage() {
     }
     setIsLoading(true);
     setError(null);
+    
     supabase
       .rpc("search_products", { search_term: searchTerm })
       .then(({ data, error }) => {
@@ -55,6 +60,13 @@ export default function SearchResultsPage() {
         } else {
           setSearchResults((data as Product[]) || []);
         }
+      })
+      .catch((err) => {
+        console.error('Search error:', err);
+        setError("Could not fetch search results.");
+        setSearchResults([]);
+      })
+      .finally(() => {
         setIsLoading(false);
       });
   }, [searchTerm]);
@@ -66,11 +78,16 @@ export default function SearchResultsPage() {
       .select("*, section_items(*, products(*))")
       .eq("display_context", "search_results_interspersed_content")
       .order("display_order", { ascending: true })
-      .then(({ data }) => {
-        // Only keep sections with non-empty section_items
-        setInterspersedContent((data || []).filter((section: InterspersedContentSection) =>
-          Array.isArray(section.section_items) && section.section_items.length > 0
-        ));
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Error fetching interspersed content:', error);
+          setInterspersedContent([]);
+        } else {
+          // Only keep sections with non-empty section_items
+          setInterspersedContent((data || []).filter((section: InterspersedContentSection) =>
+            Array.isArray(section.section_items) && section.section_items.length > 0
+          ));
+        }
       });
   }, []);
 
@@ -94,57 +111,77 @@ export default function SearchResultsPage() {
   }, [searchResults, interspersedContent]);
 
   return (
-    <div className="bg-gray-50 min-h-screen py-8 px-2 sm:px-4 max-w-7xl mx-auto">
-      {searchTerm.length >= MIN_SEARCH_LENGTH ? (
-        <>
-          <h2 className="text-lg font-semibold mb-5 text-gray-900">
-            {isLoading
-              ? <>Searching for <span className="font-bold text-green-700">{searchTerm}</span>...</>
-              : `Results for "${searchTerm}"`
-            }
-          </h2>
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {[...Array(PRODUCT_CHUNK)].map((_, i) => (
-                <div key={i} className="h-52"><Skeleton className="w-full h-full" /></div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="text-red-600 font-medium mt-8 text-center">{error}</div>
-          ) : searchResults.length === 0 ? (
-            <div className="mt-8 text-center">
-              <div className="text-lg font-semibold mb-2">
-                No results found for "<span className="text-green-800">{searchTerm}</span>"
-              </div>
-              <div className="text-gray-500">Check your spelling or try a different term.</div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-1">
-              {mergedResults.map((item, idx) =>
-                "interspersedContent" in item ? (
-                  <div
-                    key={`content-${idx}`}
-                    className="col-span-full mb-4"
-                  >
-                    {/* Interspersed Content block rendering */}
-                    <InterspersedContentBlock section={item.interspersedContent} />
-                  </div>
-                ) : (
-                  <ProductCard
-                    key={item.product_id}
-                    product={item}
-                    onQuickView={() => {}} // Optionally wire to modal if needed
-                  />
-                )
-              )}
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="text-gray-400 text-center py-12 text-lg">
-          Search for your favorite products...
+    <div className="bg-gray-50 min-h-screen">
+      {/* Header with back button */}
+      <div className="bg-white shadow-sm sticky top-0 z-40">
+        <div className="w-full max-w-screen-xl mx-auto px-4 py-4">
+          <div className="flex items-center space-x-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="p-2"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-xl font-semibold text-gray-900">Search Results</h1>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Content */}
+      <div className="w-full max-w-screen-xl mx-auto py-8 px-4">
+        {searchTerm.length >= MIN_SEARCH_LENGTH ? (
+          <>
+            <h2 className="text-lg font-semibold mb-5 text-gray-900">
+              {isLoading
+                ? <>Searching for <span className="font-bold text-green-700">{searchTerm}</span>...</>
+                : `Results for "${searchTerm}"`
+              }
+            </h2>
+            {isLoading ? (
+              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {[...Array(PRODUCT_CHUNK)].map((_, i) => (
+                  <div key={i} className="h-52"><Skeleton className="w-full h-full" /></div>
+                ))}
+              </div>
+            ) : error ? (
+              <div className="text-red-600 font-medium mt-8 text-center">{error}</div>
+            ) : searchResults.length === 0 ? (
+              <div className="mt-8 text-center">
+                <div className="text-lg font-semibold mb-2">
+                  No results found for "<span className="text-green-800">{searchTerm}</span>"
+                </div>
+                <div className="text-gray-500">Check your spelling or try a different term.</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mt-1">
+                {mergedResults.map((item, idx) =>
+                  "interspersedContent" in item ? (
+                    <div
+                      key={`content-${idx}`}
+                      className="col-span-full mb-4"
+                    >
+                      {/* Interspersed Content block rendering */}
+                      <InterspersedContentBlock section={item.interspersedContent} />
+                    </div>
+                  ) : (
+                    <ProductCard
+                      key={item.product_id}
+                      product={item}
+                      onQuickView={() => {}} // Optionally wire to modal if needed
+                    />
+                  )
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-gray-400 text-center py-12 text-lg">
+            Search for your favorite products...
+          </div>
+        )}
+      </div>
     </div>
   );
 }

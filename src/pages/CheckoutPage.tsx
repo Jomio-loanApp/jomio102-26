@@ -31,7 +31,6 @@ const CheckoutPage = () => {
   const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
 
   // Form states
-  const [orderJustPlaced, setOrderJustPlaced] = useState(false);
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('')
@@ -48,8 +47,8 @@ const CheckoutPage = () => {
   const [optionsError, setOptionsError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Redirect if no items or location, and order was not just placed
-    if (items.length === 0 && !orderJustPlaced) { // MODIFIED LINE
+    // Redirect if no items or location
+    if (items.length === 0) {
       navigate('/cart')
       return
     }
@@ -66,7 +65,7 @@ const CheckoutPage = () => {
     }
     
     fetchInitialData()
-  }, [items.length, deliveryLat, deliveryLng, user, profile, navigate, orderJustPlaced]) // ADD orderJustPlaced to dependencies
+  }, [items.length, deliveryLat, deliveryLng, user, profile, navigate])
 
   useEffect(() => {
     // Calculate delivery charge for instant delivery
@@ -229,7 +228,6 @@ const CheckoutPage = () => {
       // Success: clear cart and navigate to success page
       console.log('Order placed successfully:', response.data)
       clearCart()
-      setOrderJustPlaced(true); // ADD THIS LINE
       navigate(`/order-confirmation/success/${response.data.order_id}`)
 
     } catch (error: any) {

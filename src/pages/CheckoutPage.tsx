@@ -27,7 +27,7 @@ interface DeliveryOption {
 const CheckoutPage = () => {
   const navigate = useNavigate()
   const { user, profile } = useAuthStore()
-  const { items, getSubtotal, clearCart } = useCartStore()
+  const { items, getSubtotal } = useCartStore()
   const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
 
   // Form states
@@ -45,6 +45,7 @@ const CheckoutPage = () => {
   const [isLoadingOptions, setIsLoadingOptions] = useState(false)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [optionsError, setOptionsError] = useState<string | null>(null)
+  const [orderError, setOrderError] = useState<string | null>(null)
 
   useEffect(() => {
     // Redirect if no items or location
@@ -157,8 +158,12 @@ const CheckoutPage = () => {
     }
   }
 
-  // CRITICAL FIX: Rewritten order placement function
+  // REWRITTEN ORDER PLACEMENT FUNCTION
   const handlePlaceOrder = async () => {
+    // Clear any previous errors
+    setOrderError(null)
+    
+    // Set loading state to disable button
     setIsPlacingOrder(true)
 
     try {
@@ -182,7 +187,7 @@ const CheckoutPage = () => {
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
       }))
 
-      // Authenticated user order payload
+      // Construct complete payload for authenticated order
       const payload = {
         p_delivery_lat: deliveryLat,
         p_delivery_lon: deliveryLng,
@@ -194,36 +199,31 @@ const CheckoutPage = () => {
       
       console.log('Placing order with payload:', payload)
       
-      // CRITICAL: Await the order placement inside try/catch
+      // Make the API call - will throw on non-2xx response
       const response = await supabase.functions.invoke("create-authenticated-order", {
         body: payload
       })
 
-      if (response.error) {
-        throw new Error(response.error.message || "Order placement failed.")
-      }
-
-      if (!response.data?.order_id) {
-        throw new Error("Order placement failed - no order ID returned.")
-      }
-
-      // SUCCESS: Clear cart and navigate to success page (NOT cart page)
+      // If we reach here, the order was successful
       console.log('Order placed successfully:', response.data)
-      clearCart()
       
-      // CRITICAL FIX: Navigate to success page instead of cart
-      navigate(`/order-successful/${response.data.order_id}`)
+      // Navigate immediately to success page - cart will be cleared there
+      navigate('/order-placed-successfully')
 
     } catch (error: any) {
       console.error('Order placement error:', error)
       
-      // CRITICAL: Show error and re-enable button
+      // Set error message for display
+      setOrderError("Order placement failed. Please review your details and try again.")
+      
+      // Show toast as well
       toast({
         title: "Order Failed",
-        description: error.message || "Order placement failed. Please try again.",
+        description: "Order placement failed. Please review your details and try again.",
         variant: "destructive",
       })
     } finally {
+      // Re-enable the button
       setIsPlacingOrder(false)
     }
   }
@@ -251,6 +251,16 @@ const CheckoutPage = () => {
             </Button>
             <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
           </div>
+
+          {/* Order Error Alert */}
+          {orderError && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                {orderError}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Minimum order alert */}
           {!isMinimumOrderMet && minimumOrderValue > 0 && (

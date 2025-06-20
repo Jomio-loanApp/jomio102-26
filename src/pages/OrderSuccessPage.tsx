@@ -1,11 +1,18 @@
 
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useCartStore } from '@/stores/cartStore'
 import { Button } from '@/components/ui/button'
 import { Check, Receipt, Home } from 'lucide-react'
 
 const OrderSuccessPage = () => {
-  const { orderId } = useParams<{ orderId: string }>()
   const navigate = useNavigate()
+  const { clearCart } = useCartStore()
+
+  // Clear cart when this page loads
+  useEffect(() => {
+    clearCart()
+  }, [clearCart])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-green-50">
@@ -15,12 +22,8 @@ const OrderSuccessPage = () => {
         </div>
         
         <h1 className="text-2xl font-bold text-green-700 text-center">
-          Your Order Has Been Placed Successfully!
+          Thank you! Your Order Has Been Placed Successfully.
         </h1>
-        
-        <p className="text-lg text-gray-700 text-center">
-          Your Order ID is: <span className="font-semibold text-gray-900">#{orderId}</span>
-        </p>
         
         <div className="w-full space-y-3">
           <Button
@@ -29,7 +32,7 @@ const OrderSuccessPage = () => {
             size="lg"
           >
             <Receipt className="w-4 h-4 mr-2" />
-            View Order Details
+            View My Orders
           </Button>
           
           <Button

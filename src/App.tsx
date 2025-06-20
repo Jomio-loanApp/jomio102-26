@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { useAppStore } from '@/stores/appStore'
 import { supabase } from '@/lib/supabase'
 import SplashScreen from '@/components/SplashScreen'
 import BottomNavigation from '@/components/BottomNavigation'
@@ -26,6 +27,7 @@ function AppWithRouter() {
   const navigate = useNavigate()
   const location = useLocation()
   const { initialize, isInitialized, user, checkSessionOnFocus } = useAuthStore()
+  const { setIsSupabaseReady, setIsRecoveringSession } = useAppStore()
 
   useEffect(() => {
     initialize()
@@ -73,6 +75,9 @@ function AppWithRouter() {
       if (document.visibilityState === 'visible') {
         try {
           console.log('App became visible, refreshing Supabase connection')
+          setIsRecoveringSession(true)
+          setIsSupabaseReady(false)
+          
           // Refresh the auth session to re-establish connection
           await supabase.auth.getSession()
           
@@ -80,21 +85,45 @@ function AppWithRouter() {
           await checkSessionOnFocus()
           
           console.log('App visibility change handled successfully')
+          setIsSupabaseReady(true)
         } catch (error) {
           console.error('Failed to refresh Supabase connection:', error)
+          setIsSupabaseReady(true) // Still set to true to prevent permanent blocking
+        } finally {
+          setIsRecoveringSession(false)
         }
+      }
+    }
+
+    const handleWindowFocus = async () => {
+      try {
+        console.log('Window gained focus, checking session...')
+        setIsRecoveringSession(true)
+        setIsSupabaseReady(false)
+        
+        // Re-validate session on window focus
+        await supabase.auth.getSession()
+        await checkSessionOnFocus()
+        
+        console.log('Session checked and ready')
+        setIsSupabaseReady(true)
+      } catch (error) {
+        console.error('Failed to check session on focus:', error)
+        setIsSupabaseReady(true) // Still set to true to prevent permanent blocking
+      } finally {
+        setIsRecoveringSession(false)
       }
     }
 
     // Listen for both visibilitychange and focus events for comprehensive coverage
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
     }
-  }, [checkSessionOnFocus])
+  }, [checkSessionOnFocus, setIsSupabaseReady, setIsRecoveringSession])
 
   if (!isInitialized) {
     return <SplashScreen />
@@ -134,8 +163,9 @@ function AppWithRouter() {
         <Route path="/checkout" element={<CheckoutPage />} />
         
         {/* Order confirmation routes */}
-        <Route path="/order-successful/:orderId" element={<OrderSuccessPage />} />
-        <Route path="/order-confirmation/success/:orderId" element={<OrderSuccessPage />} />
+        <Route path="/order-placed-successfully" element={<OrderSuccessPage />} />
+        <Route path="/order-successful/:orderId" element={<Navigate to="/order-placed-successfully" />} />
+        <Route path="/order-confirmation/success/:orderId" element={<Navigate to="/order-placed-successfully" />} />
         <Route path="/order-confirmation/failure" element={<OrderFailurePage />} />
 
         {/* Search route */}

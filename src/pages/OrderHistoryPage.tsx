@@ -41,6 +41,7 @@ const OrderHistoryPage = () => {
       
       console.log('Fetching orders for user:', user?.id)
       
+      // FIXED: Using correct column name 'order_id' instead of 'id'
       const { data, error } = await supabase
         .from('orders')
         .select('order_id, ordered_at, status, total_amount, delivery_type, delivery_location_name')

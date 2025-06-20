@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -11,10 +10,14 @@ import { Search, AlertCircle } from 'lucide-react'
 interface Product {
   product_id: string
   name: string
+  description?: string
   price_string: string
-  image_url: string | null
-  category_id: string
-  is_available: boolean
+  numeric_price: number
+  unit_type: string
+  image_url?: string
+  category_id?: string
+  is_active: boolean
+  availability_status: string
 }
 
 interface ContentSection {

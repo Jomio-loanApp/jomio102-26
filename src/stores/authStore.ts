@@ -126,6 +126,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkSessionOnFocus: async () => {
     try {
+      console.log('Auth store: Checking session on focus...')
       const { data: { session }, error } = await supabase.auth.getSession()
       
       if (error) {
@@ -143,10 +144,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Session is valid, refresh data if needed
       const currentUser = get().user
       if (!currentUser || currentUser.id !== session.user.id) {
+        console.log('Auth store: Updating user from session check')
         set({ user: session.user })
         await get().refreshProfile()
       }
       
+      console.log('Auth store: Session check completed successfully')
     } catch (error) {
       console.error('Auth store: Focus check failed:', error)
       set({ user: null, profile: null })
@@ -199,17 +202,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: session.user })
       }
     })
-
-    // Set up focus event listener for session checks
-    const handleFocus = () => {
-      console.log('App gained focus, checking session...')
-      get().checkSessionOnFocus()
-    }
-
-    window.addEventListener('focus', handleFocus)
-    
-    // Note: In a real app, you'd want to clean this up when the store is destroyed
-    // For now, we'll leave it as the store persists for the app lifetime
   },
 
   updateProfile: async (updates: Partial<Profile>) => {

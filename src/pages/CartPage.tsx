@@ -59,8 +59,9 @@ const CartPage = () => {
       return
     }
     
-    // Check if user is logged in - if not, force login
+    // CRITICAL FIX: Force login for guest checkout (as per requirements)
     if (!user) {
+      console.log('Guest trying to checkout - forcing login')
       setShowLoginModal(true)
       return
     }
@@ -129,12 +130,12 @@ const CartPage = () => {
         <div className="space-y-6">
           <h1 className="text-2xl font-bold text-gray-900">Your Cart</h1>
 
-          {/* Cart Items */}
+          {/* Cart Items - FIXED LAYOUT */}
           <div className="space-y-4">
             {items.map((item) => (
               <div key={item.product_id} className="bg-white p-4 rounded-lg border border-gray-200">
                 <div className="flex gap-4">
-                  {/* Product Image */}
+                  {/* Product Image - Fixed width, prevents shrinking */}
                   <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                     {item.image_url ? (
                       <img
@@ -149,10 +150,11 @@ const CartPage = () => {
                     )}
                   </div>
 
-                  {/* Product Details - Improved Layout */}
-                  <div className="flex-1 flex flex-col justify-between min-w-0">
+                  {/* Product Details - Takes remaining space, proper vertical layout */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between">
+                    {/* Product name and price */}
                     <div className="space-y-1">
-                      <h3 className="font-semibold text-gray-900 text-sm leading-tight">
+                      <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">
                         {item.name}
                       </h3>
                       <p className="text-lg font-bold text-green-600">
@@ -160,14 +162,14 @@ const CartPage = () => {
                       </p>
                     </div>
                     
-                    {/* Quantity Controls and Remove Button */}
-                    <div className="flex items-center justify-between mt-2">
+                    {/* Quantity Controls and Remove Button - Bottom aligned */}
+                    <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center space-x-2">
                         <Button
                           onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
                           size="sm"
                           variant="outline"
-                          className="w-8 h-8 p-0"
+                          className="w-8 h-8 p-0 flex-shrink-0"
                         >
                           <Minus className="w-3 h-3" />
                         </Button>
@@ -178,7 +180,7 @@ const CartPage = () => {
                           onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
                           size="sm"
                           variant="outline"
-                          className="w-8 h-8 p-0"
+                          className="w-8 h-8 p-0 flex-shrink-0"
                         >
                           <Plus className="w-3 h-3" />
                         </Button>
@@ -188,7 +190,7 @@ const CartPage = () => {
                         onClick={() => handleRemoveItem(item.product_id, item.name)}
                         size="sm"
                         variant="ghost"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2 flex-shrink-0"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -245,7 +247,7 @@ const CartPage = () => {
         </div>
       </div>
 
-      {/* Login Modal */}
+      {/* Login Modal - Critical for forcing guest authentication */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}

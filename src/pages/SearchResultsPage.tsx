@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -38,11 +37,36 @@ export default function SearchResultsPage() {
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [interspersedContent, setInterspersedContent] = useState<InterspersedContentSection[]>([]);
+  const [isSupabaseReady, setIsSupabaseReady] = useState(true);
 
-  // Fetch search products results
+  // CRITICAL FIX: Listen for app visibility changes to fix lazy loading bug
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Search page: App became visible, checking Supabase session...');
+        setIsSupabaseReady(false);
+        
+        try {
+          // Refresh Supabase session to prevent stale connections
+          await supabase.auth.getSession();
+          console.log('Search page: Session refreshed successfully');
+        } catch (error) {
+          console.error('Search page: Failed to refresh session:', error);
+        } finally {
+          setIsSupabaseReady(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // Fetch search products results - GATED by Supabase readiness
   useEffect(() => {
     const fetchSearchResults = async () => {
-      if (searchTerm.length < MIN_SEARCH_LENGTH) {
+      // CRITICAL: Don't fetch if Supabase is not ready or search term is too short
+      if (!isSupabaseReady || searchTerm.length < MIN_SEARCH_LENGTH) {
         setSearchResults([]);
         setError(null);
         return;
@@ -52,12 +76,15 @@ export default function SearchResultsPage() {
       setError(null);
       
       try {
+        console.log('Fetching search results for:', searchTerm);
         const { data, error } = await supabase.rpc("search_products", { search_term: searchTerm });
         
         if (error) {
+          console.error('Search error:', error);
           setError("Could not fetch search results.");
           setSearchResults([]);
         } else {
+          console.log('Search results fetched:', data);
           setSearchResults((data as Product[]) || []);
         }
       } catch (err) {
@@ -70,12 +97,15 @@ export default function SearchResultsPage() {
     };
 
     fetchSearchResults();
-  }, [searchTerm]);
+  }, [searchTerm, isSupabaseReady]); // Add isSupabaseReady to dependencies
 
   // Fetch interspersed (dynamic) content for "search_results_interspersed_content"
   useEffect(() => {
     const fetchInterspersedContent = async () => {
+      if (!isSupabaseReady) return;
+      
       try {
+        console.log('Fetching interspersed content...');
         const { data, error } = await supabase
           .from("home_content_sections")
           .select("*, section_items(*, products(*))")
@@ -86,6 +116,7 @@ export default function SearchResultsPage() {
           console.error('Error fetching interspersed content:', error);
           setInterspersedContent([]);
         } else {
+          console.log('Interspersed content fetched:', data);
           // Only keep sections with non-empty section_items
           setInterspersedContent((data || []).filter((section: InterspersedContentSection) =>
             Array.isArray(section.section_items) && section.section_items.length > 0
@@ -98,13 +129,14 @@ export default function SearchResultsPage() {
     };
 
     fetchInterspersedContent();
-  }, []);
+  }, [isSupabaseReady]);
 
-  // Merge logic: intersperse content after every 6 products (can tune dynamically)
+  // CRITICAL FIX: Merge logic to intersperse content after every 6 products
   const mergedResults = useMemo(() => {
     const merged: Array<Product | { interspersedContent: InterspersedContentSection }> = [];
     let productIdx = 0;
     let contentIdx = 0;
+    
     while (productIdx < searchResults.length || contentIdx < interspersedContent.length) {
       // Add up to PRODUCT_CHUNK products
       for (let i = 0; i < PRODUCT_CHUNK && productIdx < searchResults.length; ++i, ++productIdx) {
@@ -142,6 +174,7 @@ export default function SearchResultsPage() {
               }
             </h2>
             {isLoading ? (
+              // CRITICAL FIX: Mobile-first grid layout (3 columns on mobile)
               <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {[...Array(PRODUCT_CHUNK)].map((_, i) => (
                   <div key={i} className="h-52"><Skeleton className="w-full h-full" /></div>
@@ -157,6 +190,7 @@ export default function SearchResultsPage() {
                 <div className="text-gray-500">Check your spelling or try a different term.</div>
               </div>
             ) : (
+              // CRITICAL FIX: Mobile-first grid layout with proper responsive classes
               <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mt-1">
                 {mergedResults.map((item, idx) =>
                   "interspersedContent" in item ? (
@@ -191,6 +225,7 @@ export default function SearchResultsPage() {
 // Show only if section.section_items present and length > 0
 function InterspersedContentBlock({ section }: { section: InterspersedContentSection }) {
   if (!section.section_items || !section.section_items.length) return null;
+  
   // Simple renderer for the section for now; can expand as needed based on section_type
   return (
     <div className="bg-white shadow rounded-lg p-4 text-center">

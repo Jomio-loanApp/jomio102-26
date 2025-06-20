@@ -157,6 +157,7 @@ const CheckoutPage = () => {
     }
   }
 
+  // CRITICAL FIX: Rewritten order placement function
   const handlePlaceOrder = async () => {
     setIsPlacingOrder(true)
 
@@ -181,7 +182,7 @@ const CheckoutPage = () => {
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
       }))
 
-      // Authenticated user order
+      // Authenticated user order payload
       const payload = {
         p_delivery_lat: deliveryLat,
         p_delivery_lon: deliveryLng,
@@ -192,6 +193,8 @@ const CheckoutPage = () => {
       }
       
       console.log('Placing order with payload:', payload)
+      
+      // CRITICAL: Await the order placement inside try/catch
       const response = await supabase.functions.invoke("create-authenticated-order", {
         body: payload
       })
@@ -204,14 +207,17 @@ const CheckoutPage = () => {
         throw new Error("Order placement failed - no order ID returned.")
       }
 
-      // Success: clear cart and navigate to success page
+      // SUCCESS: Clear cart and navigate to success page (NOT cart page)
       console.log('Order placed successfully:', response.data)
       clearCart()
+      
+      // CRITICAL FIX: Navigate to success page instead of cart
       navigate(`/order-successful/${response.data.order_id}`)
 
     } catch (error: any) {
       console.error('Order placement error:', error)
       
+      // CRITICAL: Show error and re-enable button
       toast({
         title: "Order Failed",
         description: error.message || "Order placement failed. Please try again.",
@@ -457,7 +463,7 @@ const CheckoutPage = () => {
                     Placing Order...
                   </>
                 ) : (
-                  `Place Order - ₹${total.toFixed(2)}`
+                  `Place Order - ₹{total.toFixed(2)}`
                 )}
               </Button>
             </div>

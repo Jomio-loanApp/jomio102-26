@@ -25,7 +25,7 @@ import SearchResultsPage from "@/pages/SearchResultsPage"
 function AppWithRouter() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { initialize, isInitialized, user } = useAuthStore()
+  const { initialize, isInitialized, user, checkSessionOnFocus } = useAuthStore()
 
   useEffect(() => {
     initialize()
@@ -67,26 +67,34 @@ function AppWithRouter() {
     }
   }, [navigate, location.pathname])
 
-  // Handle app visibility changes to prevent freezing
+  // Handle app visibility changes to prevent freezing and session staleness
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         try {
+          console.log('App became visible, refreshing Supabase connection')
           // Refresh the auth session to re-establish connection
           await supabase.auth.getSession()
-          console.log('App became visible, refreshed Supabase connection')
+          
+          // Also check and update auth state
+          await checkSessionOnFocus()
+          
+          console.log('App visibility change handled successfully')
         } catch (error) {
           console.error('Failed to refresh Supabase connection:', error)
         }
       }
     }
 
+    // Listen for both visibilitychange and focus events for comprehensive coverage
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
     }
-  }, [])
+  }, [checkSessionOnFocus])
 
   if (!isInitialized) {
     return <SplashScreen />

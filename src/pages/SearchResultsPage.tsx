@@ -1,9 +1,11 @@
+
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/stores/appStore'
 import Header from '@/components/Header'
 import ProductCard from '@/components/ProductCard'
+import DynamicContentSection from '@/components/DynamicContentSection'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search, AlertCircle } from 'lucide-react'
 
@@ -26,6 +28,7 @@ interface ContentSection {
   section_type: string
   display_order: number
   section_items: any[]
+  _type?: string
 }
 
 const SearchResultsPage = () => {
@@ -52,6 +55,7 @@ const SearchResultsPage = () => {
     fetchSearchResults()
   }, [searchTerm, isSupabaseReady, isRecoveringSession])
 
+  // COMPLETELY REWRITTEN SEARCH RESULTS FETCHING WITH PARALLEL QUERIES
   const fetchSearchResults = async () => {
     try {
       setIsLoading(true)
@@ -59,56 +63,71 @@ const SearchResultsPage = () => {
       
       console.log('Fetching search results for:', searchTerm)
       
-      // Parallel fetches for better performance
-      const [productResponse, contentResponse] = await Promise.all([
-        // Fetch 1: Product search results
+      // PARALLEL FETCHES using Promise.all for better performance
+      const [productResponse, dynamicContentResponse] = await Promise.all([
+        // Fetch 1: Product search results using RPC function
         supabase.rpc('search_products', { search_term: searchTerm }),
         
-        // Fetch 2: Interspersed dynamic content
+        // Fetch 2: Interspersed dynamic content for search results
         supabase
           .from('home_content_sections')
-          .select('*, section_items(*, products(*))')
+          .select(`
+            *,
+            section_items (
+              *,
+              products (*)
+            )
+          `)
           .eq('display_context', 'search_results_interspersed_content')
           .order('display_order', { ascending: true })
       ])
 
+      // Handle product response
       if (productResponse.error) {
-        throw productResponse.error
+        console.error('Product search error:', productResponse.error)
+        throw new Error(`Product search failed: ${productResponse.error.message}`)
       }
 
-      if (contentResponse.error) {
-        console.warn('Failed to fetch dynamic content:', contentResponse.error)
+      // Handle dynamic content response (warn but don't fail if this errors)
+      if (dynamicContentResponse.error) {
+        console.warn('Failed to fetch dynamic content:', dynamicContentResponse.error)
       }
 
       const products = productResponse.data || []
-      const dynamicContent = contentResponse.data || []
+      const dynamicContent = dynamicContentResponse.data || []
       
-      console.log('Search results fetched:', { products: products.length, dynamicContent: dynamicContent.length })
+      console.log('Search results fetched successfully:', { 
+        products: products.length, 
+        dynamicContent: dynamicContent.length 
+      })
       
-      // Merge results: insert dynamic content at intervals
-      let results = [...products]
+      // MERGE LOGIC: Insert dynamic content blocks at intervals
+      let finalResults = [...products]
       
       // Insert dynamic content after every 6th product
       dynamicContent.forEach((contentBlock, index) => {
         const insertPosition = (index + 1) * 6 + index
-        if (insertPosition < results.length) {
-          results.splice(insertPosition, 0, { 
+        if (insertPosition < finalResults.length) {
+          finalResults.splice(insertPosition, 0, { 
             ...contentBlock, 
             _type: 'content_section' 
           })
         } else {
-          results.push({ 
+          // If there are not enough products, append to the end
+          finalResults.push({ 
             ...contentBlock, 
             _type: 'content_section' 
           })
         }
       })
       
-      setCombinedResults(results)
+      setCombinedResults(finalResults)
+      console.log('Combined results set successfully. Total items:', finalResults.length)
       
     } catch (error: any) {
       console.error('Search failed:', error)
       setError(error.message || 'Search failed. Please try again.')
+      setCombinedResults([])
     } finally {
       setIsLoading(false)
     }
@@ -116,7 +135,6 @@ const SearchResultsPage = () => {
 
   const handleQuickView = (product: Product) => {
     setSelectedProduct(product)
-    // You can implement a quick view modal here if needed
     console.log('Quick view for product:', product.name)
   }
 
@@ -172,28 +190,48 @@ const SearchResultsPage = () => {
     }
 
     return (
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+      <div className="space-y-6">
+        {/* RENDER COMBINED RESULTS with proper type checking */}
         {combinedResults.map((item, index) => {
           // Check if this is a content section or a product
           if (item._type === 'content_section') {
             return (
-              <div key={`content-${item.content_section_id}-${index}`} className="col-span-full">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
-                  <div className="text-sm text-gray-600">Dynamic content section</div>
-                </div>
+              <DynamicContentSection
+                key={`content-${item.content_section_id}-${index}`}
+                sectionData={item}
+                onQuickView={handleQuickView}
+              />
+            )
+          }
+          
+          // Regular product - render in a grid container if it's the first in a group
+          const isFirstInGroup = index === 0 || combinedResults[index - 1]._type === 'content_section'
+          const isLastInGroup = index === combinedResults.length - 1 || combinedResults[index + 1]._type === 'content_section'
+          
+          if (isFirstInGroup) {
+            // Find all consecutive products starting from this index
+            const productGroup = []
+            let currentIndex = index
+            while (currentIndex < combinedResults.length && !combinedResults[currentIndex]._type) {
+              productGroup.push(combinedResults[currentIndex])
+              currentIndex++
+            }
+            
+            return (
+              <div key={`product-group-${index}`} className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                {productGroup.map((product, prodIndex) => (
+                  <ProductCard
+                    key={`product-${product.product_id}-${index + prodIndex}`}
+                    product={product}
+                    onQuickView={handleQuickView}
+                  />
+                ))}
               </div>
             )
           }
           
-          // Render as product
-          return (
-            <ProductCard
-              key={`product-${item.product_id}-${index}`}
-              product={item}
-              onQuickView={handleQuickView}
-            />
-          )
+          // Skip individual products that are part of a group
+          return null
         })}
       </div>
     )
@@ -203,7 +241,7 @@ const SearchResultsPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Header showSearch={true} />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
+      <div className="max-w-7xl mx-auto px-2 py-6 pb-20 md:pb-6">
         {searchTerm && (
           <div className="mb-6">
             <h1 className="text-xl font-semibold text-gray-900">

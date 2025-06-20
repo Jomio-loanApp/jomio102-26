@@ -102,43 +102,58 @@ const CheckoutPage = () => {
     }
   }
 
+  // COMPLETELY REWRITTEN DELIVERY OPTIONS FETCH WITH ROBUST VALIDATION
   const fetchDeliveryOptions = async () => {
     try {
       setIsLoadingOptions(true)
       setOptionsError(null)
       
       console.log('Fetching delivery options...')
-      const { data, error } = await supabase.functions.invoke('get-available-delivery-options')
-
-      if (error) {
-        console.error('Error returned from invoke:', error)
-        throw error
-      }
-
-      console.log('Successfully received data from server. Type:', typeof data, 'IsArray:', Array.isArray(data))
-      console.log('Data content:', JSON.stringify(data, null, 2))
-
-      if (!Array.isArray(data)) {
-        console.error('Data format is not an array. Triggering fallback.')
-        throw new Error('Received invalid data format from server.')
-      }
-
-      setDeliveryOptions(data)
-      console.log('Delivery options state updated successfully.')
-
-    } catch (e: any) {
-      console.error('Caught final error in delivery options fetch:', e.message)
       
+      // Call the Edge Function with proper error handling
+      const response = await supabase.functions.invoke('get-available-delivery-options')
+      
+      // Log the raw response to debug what we're receiving
+      console.log('Received response from get-available-delivery-options. Data:', response.data, 'Error:', response.error)
+      
+      // Check for invocation errors first
+      if (response.error) {
+        console.error('Error returned from Edge Function invoke:', response.error)
+        throw new Error(`Edge Function error: ${response.error.message || 'Unknown error'}`)
+      }
+      
+      // Validate that we have data and it's in the correct format
+      if (response.data && Array.isArray(response.data)) {
+        console.log('Data is a valid array. Setting delivery options state.')
+        console.log('Delivery options data structure:', JSON.stringify(response.data, null, 2))
+        
+        setDeliveryOptions(response.data)
+        console.log('Delivery options state updated successfully.')
+        
+      } else {
+        console.error('Data received from server is not a valid array. Triggering fallback.')
+        console.error('Received data type:', typeof response.data)
+        console.error('Is array check result:', Array.isArray(response.data))
+        
+        throw new Error('Invalid data format received from server - expected array')
+      }
+
+    } catch (error: any) {
+      console.error('Caught final error in delivery options fetch:', error.message)
+      
+      // Show error message to user
       setOptionsError('Unable to load delivery options from server. Using defaults.')
       
-      // Fallback options only when API fails
-      const fallbackOptions = [
+      // Use fallback options when the API fails or returns invalid data
+      const fallbackOptions: DeliveryOption[] = [
         { type: 'instant', label: 'Instant Delivery (30-45 min)', charge: 0 },
         { type: 'morning', label: 'Morning Delivery (Tomorrow 7 AM - 9 AM)', charge: 0 },
         { type: 'evening', label: 'Evening Delivery (Tomorrow 6 PM - 8 PM)', charge: 0 },
       ]
+      
       setDeliveryOptions(fallbackOptions)
       console.log('Using fallback delivery options:', fallbackOptions)
+      
     } finally {
       setIsLoadingOptions(false)
     }
@@ -330,7 +345,7 @@ const CheckoutPage = () => {
                 </CardContent>
               </Card>
 
-              {/* Delivery Options */}
+              {/* Delivery Options - FIXED UI RENDERING */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -342,36 +357,46 @@ const CheckoutPage = () => {
                   {isLoadingOptions ? (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="w-6 h-6 animate-spin" />
+                      <span className="ml-2 text-sm text-gray-600">Loading delivery options...</span>
                     </div>
                   ) : (
                     <>
                       {optionsError && (
-                        <Alert className="mb-4">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{optionsError}</AlertDescription>
+                        <Alert className="mb-4 border-yellow-200 bg-yellow-50">
+                          <AlertCircle className="h-4 w-4 text-yellow-600" />
+                          <AlertDescription className="text-yellow-700">{optionsError}</AlertDescription>
                         </Alert>
                       )}
-                      <RadioGroup
-                        value={selectedDeliveryOption}
-                        onValueChange={setSelectedDeliveryOption}
-                        className="space-y-3"
-                      >
-                        {deliveryOptions.map((option) => (
-                          <div key={option.type} className="flex items-center space-x-2">
-                            <RadioGroupItem value={option.type} id={option.type} />
-                            <Label htmlFor={option.type} className="flex-1 cursor-pointer">
-                              <div className="flex justify-between items-center">
-                                <span>{option.label}</span>
-                                {option.type === 'instant' && selectedDeliveryOption === 'instant' && deliveryCharge > 0 && (
-                                  <span className="text-sm text-green-600 font-medium">
-                                    +₹{deliveryCharge.toFixed(2)}
-                                  </span>
-                                )}
-                              </div>
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
+                      
+                      {/* ROBUST UI RENDERING - Only show if we have valid delivery options */}
+                      {Array.isArray(deliveryOptions) && deliveryOptions.length > 0 ? (
+                        <RadioGroup
+                          value={selectedDeliveryOption}
+                          onValueChange={setSelectedDeliveryOption}
+                          className="space-y-3"
+                        >
+                          {deliveryOptions.map((option) => (
+                            <div key={option.type} className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50">
+                              <RadioGroupItem value={option.type} id={option.type} />
+                              <Label htmlFor={option.type} className="flex-1 cursor-pointer">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium">{option.label}</span>
+                                  {option.type === 'instant' && selectedDeliveryOption === 'instant' && deliveryCharge > 0 && (
+                                    <span className="text-sm text-green-600 font-medium">
+                                      +₹{deliveryCharge.toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      ) : (
+                        <div className="text-center py-4">
+                          <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">No delivery options available</p>
+                        </div>
+                      )}
                     </>
                   )}
                 </CardContent>

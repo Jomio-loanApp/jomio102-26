@@ -101,7 +101,7 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
               }}
               onClick={() => navigate('/')}
             >
-              JOMIO STORE
+              JOMIO DARBHANGA
             </h1>
           </div>
         )}

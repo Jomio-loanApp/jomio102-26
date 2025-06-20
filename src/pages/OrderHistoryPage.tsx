@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Receipt, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import IOSBackButton from "@/components/IOSBackButton";
 
 const PAGE_SIZE = 10;
 
@@ -178,14 +179,7 @@ const OrderHistoryPage = () => {
       {/* Desktop-constrained container */}
       <div className="w-full max-w-screen-xl mx-auto px-4 py-8 pb-20">
         <div className="flex items-center space-x-3 mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/profile')}
-            className="p-2"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
+          <IOSBackButton fallbackRoute="/profile" previousPageTitle="Profile" />
           <h1 className="text-2xl font-bold">Order History</h1>
         </div>
 

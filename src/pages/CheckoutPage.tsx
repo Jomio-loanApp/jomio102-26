@@ -181,41 +181,20 @@ const CheckoutPage = () => {
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
       }))
 
-      let payload
-      let response
-
-      if (user) {
-        // Authenticated user order
-        payload = {
-          p_delivery_lat: deliveryLat,
-          p_delivery_lon: deliveryLng,
-          p_delivery_location_name: deliveryLocationName,
-          p_delivery_type: selectedDeliveryOption,
-          p_cart: p_cart,
-          p_customer_notes: customerNotes || null,
-        }
-        
-        console.log('Placing order with payload:', payload)
-        response = await supabase.functions.invoke("create-authenticated-order", {
-          body: payload
-        })
-      } else {
-        // Guest user order
-        payload = {
-          p_name: customerName,
-          p_phone: customerPhone,
-          p_delivery_lat: deliveryLat,
-          p_delivery_lon: deliveryLng,
-          p_delivery_location_name: deliveryLocationName,
-          p_delivery_type: selectedDeliveryOption,
-          p_cart: p_cart,
-        }
-        
-        console.log('Placing order with payload:', payload)
-        response = await supabase.functions.invoke("create-guest-order", {
-          body: payload
-        })
+      // Authenticated user order
+      const payload = {
+        p_delivery_lat: deliveryLat,
+        p_delivery_lon: deliveryLng,
+        p_delivery_location_name: deliveryLocationName,
+        p_delivery_type: selectedDeliveryOption,
+        p_cart: p_cart,
+        p_customer_notes: customerNotes || null,
       }
+      
+      console.log('Placing order with payload:', payload)
+      const response = await supabase.functions.invoke("create-authenticated-order", {
+        body: payload
+      })
 
       if (response.error) {
         throw new Error(response.error.message || "Order placement failed.")
@@ -228,13 +207,10 @@ const CheckoutPage = () => {
       // Success: clear cart and navigate to success page
       console.log('Order placed successfully:', response.data)
       clearCart()
-      navigate(`/order-confirmation/success/${response.data.order_id}`)
+      navigate(`/order-successful/${response.data.order_id}`)
 
     } catch (error: any) {
       console.error('Order placement error:', error)
-      
-      // Navigate to failure page on any error
-      navigate('/order-confirmation/failure')
       
       toast({
         title: "Order Failed",

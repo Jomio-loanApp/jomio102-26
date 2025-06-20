@@ -126,6 +126,7 @@ function AppWithRouter() {
         <Route path="/checkout" element={<CheckoutPage />} />
         
         {/* Order confirmation routes */}
+        <Route path="/order-successful/:orderId" element={<OrderSuccessPage />} />
         <Route path="/order-confirmation/success/:orderId" element={<OrderSuccessPage />} />
         <Route path="/order-confirmation/failure" element={<OrderFailurePage />} />
 

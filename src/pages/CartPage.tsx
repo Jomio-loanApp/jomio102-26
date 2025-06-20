@@ -5,6 +5,7 @@ import { useCartStore } from '@/stores/cartStore'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
 import Header from '@/components/Header'
+import LoginModal from '@/components/LoginModal'
 import { Button } from '@/components/ui/button'
 import { Plus, Minus, Trash2, ShoppingBag } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
@@ -14,6 +15,7 @@ const CartPage = () => {
   const { user } = useAuthStore()
   const [minimumOrderValue, setMinimumOrderValue] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -57,12 +59,20 @@ const CartPage = () => {
       return
     }
     
-    // Navigate based on user login status
-    if (user) {
-      navigate('/select-address')
-    } else {
-      navigate('/set-delivery-location')
+    // Check if user is logged in - if not, force login
+    if (!user) {
+      setShowLoginModal(true)
+      return
     }
+    
+    // Navigate to address selection for authenticated users
+    navigate('/select-address')
+  }
+
+  const handleLoginSuccess = () => {
+    setShowLoginModal(false)
+    // After successful login, proceed to address selection
+    navigate('/select-address')
   }
 
   if (isLoading) {
@@ -122,8 +132,8 @@ const CartPage = () => {
           {/* Cart Items */}
           <div className="space-y-4">
             {items.map((item) => (
-              <div key={item.product_id} className="bg-white p-6 rounded-lg border border-gray-200">
-                <div className="flex items-center space-x-4">
+              <div key={item.product_id} className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex gap-4">
                   {/* Product Image */}
                   <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                     {item.image_url ? (
@@ -139,48 +149,51 @@ const CartPage = () => {
                     )}
                   </div>
 
-                  {/* Product Details */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">
-                      {item.name}
-                    </h3>
-                    <p className="text-lg font-bold text-green-600 mt-1">
-                      {item.price_string}
-                    </p>
+                  {/* Product Details - Improved Layout */}
+                  <div className="flex-1 flex flex-col justify-between min-w-0">
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-gray-900 text-sm leading-tight">
+                        {item.name}
+                      </h3>
+                      <p className="text-lg font-bold text-green-600">
+                        {item.price_string}
+                      </p>
+                    </div>
+                    
+                    {/* Quantity Controls and Remove Button */}
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
+                          size="sm"
+                          variant="outline"
+                          className="w-8 h-8 p-0"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </Button>
+                        <span className="text-base font-medium min-w-[30px] text-center">
+                          {item.quantity}
+                        </span>
+                        <Button
+                          onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                          size="sm"
+                          variant="outline"
+                          className="w-8 h-8 p-0"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      
+                      <Button
+                        onClick={() => handleRemoveItem(item.product_id, item.name)}
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-
-                  {/* Quantity Controls */}
-                  <div className="flex items-center space-x-3">
-                    <Button
-                      onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
-                      size="sm"
-                      variant="outline"
-                      className="w-8 h-8 p-0"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </Button>
-                    <span className="text-lg font-medium min-w-[30px] text-center">
-                      {item.quantity}
-                    </span>
-                    <Button
-                      onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
-                      size="sm"
-                      variant="outline"
-                      className="w-8 h-8 p-0"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </Button>
-                  </div>
-
-                  {/* Remove Button */}
-                  <Button
-                    onClick={() => handleRemoveItem(item.product_id, item.name)}
-                    size="sm"
-                    variant="ghost"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
                 </div>
               </div>
             ))}
@@ -231,6 +244,13 @@ const CartPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onSuccess={handleLoginSuccess}
+      />
     </div>
   )
 }

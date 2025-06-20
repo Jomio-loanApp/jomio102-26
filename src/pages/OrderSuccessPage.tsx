@@ -1,7 +1,7 @@
 
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Check } from 'lucide-react'
+import { Check, Receipt, Home } from 'lucide-react'
 
 const OrderSuccessPage = () => {
   const { orderId } = useParams<{ orderId: string }>()
@@ -15,20 +15,33 @@ const OrderSuccessPage = () => {
         </div>
         
         <h1 className="text-2xl font-bold text-green-700 text-center">
-          Thank you! Your order has been placed successfully.
+          Your Order Has Been Placed Successfully!
         </h1>
         
         <p className="text-lg text-gray-700 text-center">
           Your Order ID is: <span className="font-semibold text-gray-900">#{orderId}</span>
         </p>
         
-        <Button
-          className="w-full mt-4 bg-green-600 hover:bg-green-700"
-          onClick={() => navigate('/')}
-          size="lg"
-        >
-          Continue Shopping
-        </Button>
+        <div className="w-full space-y-3">
+          <Button
+            className="w-full bg-green-600 hover:bg-green-700"
+            onClick={() => navigate('/profile/orders')}
+            size="lg"
+          >
+            <Receipt className="w-4 h-4 mr-2" />
+            View Order Details
+          </Button>
+          
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => navigate('/')}
+            size="lg"
+          >
+            <Home className="w-4 h-4 mr-2" />
+            Continue Shopping
+          </Button>
+        </div>
       </div>
     </div>
   )

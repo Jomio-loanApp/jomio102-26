@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/stores/appStore'
 import Header from '@/components/Header'
 import ProductCard from '@/components/ProductCard'
-import ContentSectionRenderer from '@/components/ContentSectionRenderer'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search, AlertCircle } from 'lucide-react'
 
@@ -33,6 +32,7 @@ const SearchResultsPage = () => {
   const [combinedResults, setCombinedResults] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   
   const { isSupabaseReady, isRecoveringSession } = useAppStore()
 
@@ -111,6 +111,12 @@ const SearchResultsPage = () => {
     }
   }
 
+  const handleQuickView = (product: Product) => {
+    setSelectedProduct(product)
+    // You can implement a quick view modal here if needed
+    console.log('Quick view for product:', product.name)
+  }
+
   const renderSearchResults = () => {
     if (isLoading || isRecoveringSession) {
       return (
@@ -169,7 +175,10 @@ const SearchResultsPage = () => {
           if (item._type === 'content_section') {
             return (
               <div key={`content-${item.content_section_id}-${index}`} className="col-span-full">
-                <ContentSectionRenderer section={item} />
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
+                  <div className="text-sm text-gray-600">Dynamic content section</div>
+                </div>
               </div>
             )
           }
@@ -179,6 +188,7 @@ const SearchResultsPage = () => {
             <ProductCard
               key={`product-${item.product_id}-${index}`}
               product={item}
+              onQuickView={handleQuickView}
             />
           )
         })}

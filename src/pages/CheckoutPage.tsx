@@ -106,23 +106,29 @@ const CheckoutPage = () => {
     try {
       setIsLoadingOptions(true)
       setOptionsError(null)
+      
       console.log('Fetching delivery options...')
-      
-      const response = await supabase.functions.invoke('get-available-delivery-options')
-      
-      if (response.error) {
-        throw response.error
+      const { data, error } = await supabase.functions.invoke('get-available-delivery-options')
+
+      if (error) {
+        console.error('Error returned from invoke:', error)
+        throw error
       }
-      
-      // Check if we have valid data
-      if (response.data && Array.isArray(response.data)) {
-        setDeliveryOptions(response.data)
-        console.log('Delivery options loaded successfully:', response.data)
-      } else {
-        throw new Error('Invalid response format from delivery options API')
+
+      console.log('Successfully received data from server. Type:', typeof data, 'IsArray:', Array.isArray(data))
+      console.log('Data content:', JSON.stringify(data, null, 2))
+
+      if (!Array.isArray(data)) {
+        console.error('Data format is not an array. Triggering fallback.')
+        throw new Error('Received invalid data format from server.')
       }
-    } catch (error) {
-      console.error('Error fetching delivery options:', error)
+
+      setDeliveryOptions(data)
+      console.log('Delivery options state updated successfully.')
+
+    } catch (e: any) {
+      console.error('Caught final error in delivery options fetch:', e.message)
+      
       setOptionsError('Unable to load delivery options from server. Using defaults.')
       
       // Fallback options only when API fails
@@ -132,6 +138,7 @@ const CheckoutPage = () => {
         { type: 'evening', label: 'Evening Delivery (Tomorrow 6 PM - 8 PM)', charge: 0 },
       ]
       setDeliveryOptions(fallbackOptions)
+      console.log('Using fallback delivery options:', fallbackOptions)
     } finally {
       setIsLoadingOptions(false)
     }

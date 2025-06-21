@@ -213,7 +213,7 @@ const SearchResultsPage = () => {
                     key={`product-${product.product_id}-${index + prodIndex}`}
                     product={{
                       ...product,
-                      id: product.product_id // Add id for compatibility
+                      id: product.product_id // Add id for compatibility with ProductCard
                     }}
                     onQuickView={handleQuickView}
                   />

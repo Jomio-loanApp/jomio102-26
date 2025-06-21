@@ -19,7 +19,10 @@ interface AuthState {
   
   // Actions
   initialize: () => Promise<void>
+  signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string, fullName: string, phoneNumber: string) => Promise<void>
   signOut: () => Promise<void>
+  updateProfile: (profileData: { full_name: string; phone_number: string }) => Promise<void>
   checkSessionOnFocus: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -69,6 +72,87 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: null, profile: null })
     } finally {
       set({ isLoading: false, isInitialized: true })
+    }
+  },
+
+  signIn: async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
+      set({ user: data.user })
+      await get().refreshProfile()
+      
+      console.log('User signed in successfully:', data.user?.id)
+    } catch (error) {
+      console.error('Error signing in:', error)
+      throw error
+    }
+  },
+
+  signUp: async (email: string, password: string, fullName: string, phoneNumber: string) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone_number: phoneNumber,
+          }
+        }
+      })
+
+      if (error) throw error
+
+      if (data.user) {
+        set({ user: data.user })
+        
+        // Create profile record
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: data.user.email!,
+            full_name: fullName,
+            phone_number: phoneNumber,
+          })
+
+        if (profileError) {
+          console.error('Error creating profile:', profileError)
+        }
+
+        await get().refreshProfile()
+      }
+      
+      console.log('User signed up successfully:', data.user?.id)
+    } catch (error) {
+      console.error('Error signing up:', error)
+      throw error
+    }
+  },
+
+  updateProfile: async (profileData: { full_name: string; phone_number: string }) => {
+    const { user } = get()
+    if (!user) throw new Error('No user logged in')
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(profileData)
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      await get().refreshProfile()
+      console.log('Profile updated successfully')
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      throw error
     }
   },
 

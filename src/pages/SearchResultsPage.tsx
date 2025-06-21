@@ -14,7 +14,7 @@ interface Product {
   product_id: string
   id: string
   name: string
-  description?: string  // Make optional to match ProductCard interface
+  description: string | null  // Make required to match ProductQuickView interface
   price_string: string
   numeric_price: number
   unit_type: string

@@ -34,8 +34,8 @@ interface ShopSettings {
 const CheckoutPage = () => {
   const navigate = useNavigate()
   const { user, profile } = useAuthStore()
-  const { items, getTotalPrice, clearCart } = useCartStore()
-  const { deliveryLocation } = useLocationStore()
+  const { items, getSubtotal, clearCart } = useCartStore()
+  const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
 
   // Form state
   const [customerName, setCustomerName] = useState('')
@@ -52,10 +52,17 @@ const CheckoutPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Calculations
-  const subtotal = getTotalPrice()
+  const subtotal = getSubtotal()
   const selectedOption = deliveryOptions.find(option => option.type === selectedDeliveryType)
   const deliveryCharge = selectedOption?.price || 0
   const total = subtotal + deliveryCharge
+
+  // Construct delivery location object
+  const deliveryLocation = deliveryLat && deliveryLng && deliveryLocationName ? {
+    latitude: deliveryLat,
+    longitude: deliveryLng,
+    address: deliveryLocationName
+  } : null
 
   useEffect(() => {
     if (items.length === 0) {
@@ -86,6 +93,8 @@ const CheckoutPage = () => {
       
       const response = await invokeFunction('get-available-delivery-options')
 
+      console.log('Received response from get-available-delivery-options. Data:', response.data, 'Error:', response.error);
+
       if (response.error) {
         console.error('Error returned from invoke:', response.error)
         throw response.error
@@ -94,18 +103,20 @@ const CheckoutPage = () => {
       console.log('Successfully received data from server. Type:', typeof response.data, 'IsArray:', Array.isArray(response.data))
       console.log('Data content:', JSON.stringify(response.data, null, 2))
 
-      if (!Array.isArray(response.data)) {
-        console.error('Data format is not an array. Triggering fallback.')
+      if (response.data && Array.isArray(response.data)) {
+        console.log('Data is a valid array. Setting delivery options state.');
+        setDeliveryOptions(response.data);
+        
+        // Auto-select first option if available
+        if (response.data.length > 0) {
+          setSelectedDeliveryType(response.data[0].type)
+        }
+      } else {
+        console.error('Data received from server is not a valid array. Triggering fallback.');
         throw new Error('Received invalid data format from server.')
       }
 
-      setDeliveryOptions(response.data)
       console.log('Delivery options state updated successfully.')
-
-      // Auto-select first option if available
-      if (response.data.length > 0) {
-        setSelectedDeliveryType(response.data[0].type)
-      }
 
     } catch (error) {
       console.error('Caught final error in delivery options fetch:', error.message)
@@ -194,11 +205,14 @@ const CheckoutPage = () => {
         customer_profile_id: user?.id || null,
         guest_customer_name: !user ? customerName : null,
         guest_customer_phone: !user ? customerPhone : null,
-        items: items.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price_at_purchase: item.numeric_price || 0
-        })),
+        items: items.map(item => {
+          const numericPrice = parseFloat(item.price_string.replace(/[^\d.]/g, '')) || 0
+          return {
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price_at_purchase: numericPrice
+          }
+        }),
         items_subtotal: subtotal,
         delivery_charge: deliveryCharge,
         total_amount: total,
@@ -364,19 +378,22 @@ const CheckoutPage = () => {
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {items.map((item) => (
-                <div key={item.product_id} className="flex justify-between items-center">
-                  <div className="flex-1">
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {item.quantity} × {item.price_string}
+              {items.map((item) => {
+                const numericPrice = parseFloat(item.price_string.replace(/[^\d.]/g, '')) || 0
+                return (
+                  <div key={item.product_id} className="flex justify-between items-center">
+                    <div className="flex-1">
+                      <p className="font-medium">{item.name}</p>
+                      <p className="text-sm text-gray-600">
+                        {item.quantity} × {item.price_string}
+                      </p>
+                    </div>
+                    <p className="font-semibold">
+                      ₹{(numericPrice * item.quantity).toFixed(2)}
                     </p>
                   </div>
-                  <p className="font-semibold">
-                    ₹{((item.numeric_price || 0) * item.quantity).toFixed(2)}
-                  </p>
-                </div>
-              ))}
+                )
+              })}
             </CardContent>
           </Card>
 

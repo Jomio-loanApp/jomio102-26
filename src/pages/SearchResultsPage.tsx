@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/appStore'
 import Header from '@/components/Header'
 import ProductCard from '@/components/ProductCard'
 import DynamicContentSection from '@/components/DynamicContentSection'
+import ProductQuickView from '@/components/ProductQuickView'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search, AlertCircle } from 'lucide-react'
 
@@ -22,20 +23,11 @@ interface Product {
   availability_status: string
 }
 
-interface ContentSection {
-  content_section_id: string
-  title: string
-  section_type: string
-  display_order: number
-  section_items: any[]
-  _type?: string
-}
-
 const SearchResultsPage = () => {
   const [searchParams] = useSearchParams()
   const searchTerm = searchParams.get('q') || ''
   
-  const [combinedResults, setCombinedResults] = useState<any[]>([])
+  const [displayItems, setDisplayItems] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -47,7 +39,7 @@ const SearchResultsPage = () => {
     if (!isSupabaseReady || !searchTerm || isRecoveringSession) {
       if (!searchTerm) {
         setIsLoading(false)
-        setCombinedResults([])
+        setDisplayItems([])
       }
       return
     }
@@ -55,7 +47,7 @@ const SearchResultsPage = () => {
     fetchSearchResults()
   }, [searchTerm, isSupabaseReady, isRecoveringSession])
 
-  // COMPLETELY REWRITTEN SEARCH RESULTS FETCHING WITH PARALLEL QUERIES
+  // COMPLETE REBUILD: Search Results with Parallel Fetching and Data Merging
   const fetchSearchResults = async () => {
     try {
       setIsLoading(true)
@@ -102,32 +94,26 @@ const SearchResultsPage = () => {
       })
       
       // MERGE LOGIC: Insert dynamic content blocks at intervals
-      let finalResults = [...products]
+      let combinedList = [...products]
       
-      // Insert dynamic content after every 6th product
-      dynamicContent.forEach((contentBlock, index) => {
-        const insertPosition = (index + 1) * 6 + index
-        if (insertPosition < finalResults.length) {
-          finalResults.splice(insertPosition, 0, { 
-            ...contentBlock, 
-            _type: 'content_section' 
-          })
+      // Insert dynamic blocks into the product list at intervals
+      dynamicContent.forEach((block, index) => {
+        const insertAt = ((index + 1) * 6) + index // Insert after every 6 products
+        if (insertAt < combinedList.length) {
+          combinedList.splice(insertAt, 0, { type: 'dynamic_section', data: block })
         } else {
           // If there are not enough products, append to the end
-          finalResults.push({ 
-            ...contentBlock, 
-            _type: 'content_section' 
-          })
+          combinedList.push({ type: 'dynamic_section', data: block })
         }
       })
       
-      setCombinedResults(finalResults)
-      console.log('Combined results set successfully. Total items:', finalResults.length)
+      setDisplayItems(combinedList)
+      console.log('Combined results set successfully. Total items:', combinedList.length)
       
     } catch (error: any) {
       console.error('Search failed:', error)
       setError(error.message || 'Search failed. Please try again.')
-      setCombinedResults([])
+      setDisplayItems([])
     } finally {
       setIsLoading(false)
     }
@@ -136,6 +122,10 @@ const SearchResultsPage = () => {
   const handleQuickView = (product: Product) => {
     setSelectedProduct(product)
     console.log('Quick view for product:', product.name)
+  }
+
+  const handleCloseQuickView = () => {
+    setSelectedProduct(null)
   }
 
   const renderSearchResults = () => {
@@ -179,7 +169,7 @@ const SearchResultsPage = () => {
       )
     }
 
-    if (combinedResults.length === 0) {
+    if (displayItems.length === 0) {
       return (
         <div className="text-center py-12">
           <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -192,28 +182,27 @@ const SearchResultsPage = () => {
     return (
       <div className="space-y-6">
         {/* RENDER COMBINED RESULTS with proper type checking */}
-        {combinedResults.map((item, index) => {
+        {displayItems.map((item, index) => {
           // Check if this is a content section or a product
-          if (item._type === 'content_section') {
+          if (item.type === 'dynamic_section') {
             return (
               <DynamicContentSection
-                key={`content-${item.content_section_id}-${index}`}
-                sectionData={item}
+                key={`content-${item.data.id}-${index}`}
+                sectionData={item.data}
                 onQuickView={handleQuickView}
               />
             )
           }
           
           // Regular product - render in a grid container if it's the first in a group
-          const isFirstInGroup = index === 0 || combinedResults[index - 1]._type === 'content_section'
-          const isLastInGroup = index === combinedResults.length - 1 || combinedResults[index + 1]._type === 'content_section'
+          const isFirstInGroup = index === 0 || displayItems[index - 1]?.type === 'dynamic_section'
           
           if (isFirstInGroup) {
             // Find all consecutive products starting from this index
             const productGroup = []
             let currentIndex = index
-            while (currentIndex < combinedResults.length && !combinedResults[currentIndex]._type) {
-              productGroup.push(combinedResults[currentIndex])
+            while (currentIndex < displayItems.length && !displayItems[currentIndex]?.type) {
+              productGroup.push(displayItems[currentIndex])
               currentIndex++
             }
             
@@ -222,7 +211,10 @@ const SearchResultsPage = () => {
                 {productGroup.map((product, prodIndex) => (
                   <ProductCard
                     key={`product-${product.product_id}-${index + prodIndex}`}
-                    product={product}
+                    product={{
+                      ...product,
+                      id: product.product_id // Add id for compatibility
+                    }}
                     onQuickView={handleQuickView}
                   />
                 ))}
@@ -241,15 +233,16 @@ const SearchResultsPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Header showSearch={true} />
       
+      {/* FIXED: Reduced horizontal padding to match tighter layout */}
       <div className="max-w-7xl mx-auto px-2 py-6 pb-20 md:pb-6">
         {searchTerm && (
           <div className="mb-6">
             <h1 className="text-xl font-semibold text-gray-900">
               Search results for "{searchTerm}"
             </h1>
-            {!isLoading && !isRecoveringSession && combinedResults.length > 0 && (
+            {!isLoading && !isRecoveringSession && displayItems.length > 0 && (
               <p className="text-sm text-gray-600 mt-1">
-                Found {combinedResults.filter(item => !item._type).length} products
+                Found {displayItems.filter(item => !item.type).length} products
               </p>
             )}
           </div>
@@ -257,6 +250,14 @@ const SearchResultsPage = () => {
         
         {renderSearchResults()}
       </div>
+
+      {selectedProduct && (
+        <ProductQuickView
+          product={selectedProduct}
+          isOpen={!!selectedProduct}
+          onClose={handleCloseQuickView}
+        />
+      )}
     </div>
   )
 }

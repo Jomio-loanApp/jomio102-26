@@ -9,7 +9,7 @@ const OrderSuccessPage = () => {
   const navigate = useNavigate()
   const { clearCart } = useCartStore()
 
-  // Clear cart when this page loads
+  // Clear cart when this page loads - this is the optimistic UI approach
   useEffect(() => {
     clearCart()
   }, [clearCart])
@@ -22,7 +22,7 @@ const OrderSuccessPage = () => {
         </div>
         
         <h1 className="text-2xl font-bold text-green-700 text-center">
-          Thank you! Your Order Has Been Placed Successfully.
+          Your Order Has Been Placed Successfully!
         </h1>
         
         <div className="w-full space-y-3">

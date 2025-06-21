@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, ShoppingBag, AlertCircle } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ArrowLeft, ShoppingBag, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 
@@ -16,7 +17,13 @@ interface Order {
   status: string
   total_amount: number
   delivery_type: string
-  delivery_location_name: string
+  delivery_location_name?: string
+}
+
+interface OrderItem {
+  product_name_at_purchase: string
+  quantity: number
+  price_at_purchase: number
 }
 
 const OrderHistoryPage = () => {
@@ -25,6 +32,9 @@ const OrderHistoryPage = () => {
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({})
+  const [orderItems, setOrderItems] = useState<Record<string, OrderItem[]>>({})
+  const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!user) {
@@ -41,7 +51,7 @@ const OrderHistoryPage = () => {
       
       console.log('Fetching orders for user:', user?.id)
       
-      // FIXED: Using correct column name 'order_id' instead of 'id'
+      // FIXED QUERY: Using correct columns as per Backend Schema
       const { data, error } = await supabase
         .from('orders')
         .select('order_id, ordered_at, status, total_amount, delivery_type, delivery_location_name')
@@ -60,6 +70,42 @@ const OrderHistoryPage = () => {
       setError(error.message || 'Failed to load order history')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchOrderItems = async (orderId: string) => {
+    if (orderItems[orderId] || loadingItems[orderId]) return
+
+    try {
+      setLoadingItems(prev => ({ ...prev, [orderId]: true }))
+      
+      console.log('Fetching items for order:', orderId)
+      
+      const { data, error } = await supabase
+        .from('order_items')
+        .select('product_name_at_purchase, quantity, price_at_purchase')
+        .eq('order_id', orderId)
+
+      if (error) {
+        console.error('Error fetching order items:', error)
+        throw error
+      }
+
+      console.log('Order items fetched:', data)
+      setOrderItems(prev => ({ ...prev, [orderId]: data || [] }))
+    } catch (error) {
+      console.error('Failed to fetch order items:', error)
+    } finally {
+      setLoadingItems(prev => ({ ...prev, [orderId]: false }))
+    }
+  }
+
+  const toggleOrderDetails = (orderId: string) => {
+    const isExpanded = expandedOrders[orderId]
+    setExpandedOrders(prev => ({ ...prev, [orderId]: !isExpanded }))
+    
+    if (!isExpanded) {
+      fetchOrderItems(orderId)
     }
   }
 
@@ -218,10 +264,53 @@ const OrderHistoryPage = () => {
                       <span className="text-sm text-gray-600">Delivery Type:</span>
                       <span className="text-sm">{formatDeliveryType(order.delivery_type)}</span>
                     </div>
-                    <div className="flex justify-between items-start">
-                      <span className="text-sm text-gray-600">Delivery Location:</span>
-                      <span className="text-sm text-right max-w-xs">{order.delivery_location_name}</span>
-                    </div>
+                    
+                    {/* See Details Section */}
+                    <Collapsible 
+                      open={expandedOrders[order.order_id]} 
+                      onOpenChange={() => toggleOrderDetails(order.order_id)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full mt-3">
+                          <span>See Details</span>
+                          {expandedOrders[order.order_id] ? (
+                            <ChevronUp className="w-4 h-4 ml-2" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 ml-2" />
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3 mt-3 pt-3 border-t">
+                        {order.delivery_location_name && (
+                          <div className="flex justify-between items-start">
+                            <span className="text-sm text-gray-600">Delivery Location:</span>
+                            <span className="text-sm text-right max-w-xs">{order.delivery_location_name}</span>
+                          </div>
+                        )}
+                        
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 mb-2">Order Items:</h4>
+                          {loadingItems[order.order_id] ? (
+                            <div className="space-y-2">
+                              {[...Array(3)].map((_, i) => (
+                                <Skeleton key={i} className="h-4 w-full" />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {orderItems[order.order_id]?.map((item, index) => (
+                                <div key={index} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
+                                  <span>{item.quantity}x {item.product_name_at_purchase}</span>
+                                  <span className="font-medium">₹{(item.price_at_purchase * item.quantity).toFixed(2)}</span>
+                                </div>
+                              )) || (
+                                <p className="text-sm text-gray-500">No items found for this order</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </CardContent>
               </Card>

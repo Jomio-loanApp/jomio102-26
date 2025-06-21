@@ -33,7 +33,7 @@ function AppWithRouter() {
     initialize()
   }, [initialize])
 
-  // Capacitor back button handling
+  // NATIVE APP STABILITY FEATURE 1: Capacitor back button handling
   useEffect(() => {
     const setupBackButtonHandler = async () => {
       try {
@@ -69,7 +69,7 @@ function AppWithRouter() {
     }
   }, [navigate, location.pathname])
 
-  // Handle app visibility changes to prevent freezing and session staleness
+  // CRITICAL APP-WIDE "LAZY LOADING" BUG FIX
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
@@ -78,7 +78,7 @@ function AppWithRouter() {
           setIsRecoveringSession(true)
           setIsSupabaseReady(false)
           
-          // Refresh the auth session to re-establish connection
+          // Proactively refresh session to re-validate connection
           await supabase.auth.getSession()
           
           // Also check and update auth state
@@ -101,7 +101,7 @@ function AppWithRouter() {
         setIsRecoveringSession(true)
         setIsSupabaseReady(false)
         
-        // Re-validate session on window focus
+        // Re-validate session on window focus to clear stale loading states
         await supabase.auth.getSession()
         await checkSessionOnFocus()
         
@@ -162,7 +162,7 @@ function AppWithRouter() {
         <Route path="/set-delivery-location" element={<DeliveryLocationPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         
-        {/* Order confirmation routes */}
+        {/* Order confirmation routes - NEW SIMPLIFIED FLOW */}
         <Route path="/order-placed-successfully" element={<OrderSuccessPage />} />
         <Route path="/order-successful/:orderId" element={<Navigate to="/order-placed-successfully" />} />
         <Route path="/order-confirmation/success/:orderId" element={<Navigate to="/order-placed-successfully" />} />

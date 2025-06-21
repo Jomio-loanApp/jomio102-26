@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { useLocationStore } from '@/stores/locationStore'
-import { supabase } from '@/lib/supabase'
+import { invokeFunction } from '@/services/api'
 import Header from '@/components/Header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,8 +44,7 @@ const CheckoutPage = () => {
   // UI states
   const [isLoadingOptions, setIsLoadingOptions] = useState(false)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
-  const [optionsError, setOptionsError] = useState<string | null>(null)
-  const [orderError, setOrderError] = useState<string | null>(null)
+  const [showFallback, setShowFallback] = useState(false)
 
   useEffect(() => {
     // Redirect if no items or location
@@ -87,10 +86,7 @@ const CheckoutPage = () => {
   const fetchShopSettings = async () => {
     try {
       console.log('Fetching shop settings...')
-      const { data, error } = await supabase
-        .from('shop_settings')
-        .select('minimum_order_value')
-        .single()
+      const { data, error } = await invokeFunction('get-shop-settings')
 
       if (error) throw error
       
@@ -102,60 +98,43 @@ const CheckoutPage = () => {
     }
   }
 
-  // COMPLETELY REWRITTEN DELIVERY OPTIONS FETCH WITH ROBUST VALIDATION
+  // NEW ROBUST DELIVERY OPTIONS FETCH
   const fetchDeliveryOptions = async () => {
     try {
       setIsLoadingOptions(true)
-      setOptionsError(null)
-      
-      console.log('Fetching delivery options...')
-      
-      // Call the Edge Function with proper error handling
-      const response = await supabase.functions.invoke('get-available-delivery-options')
-      
-      // Log the raw response to debug what we're receiving
-      console.log('Received response from get-available-delivery-options. Data:', response.data, 'Error:', response.error)
-      
-      // Check for invocation errors first
-      if (response.error) {
-        console.error('Error returned from Edge Function invoke:', response.error)
-        throw new Error(`Edge Function error: ${response.error.message || 'Unknown error'}`)
-      }
-      
-      // Validate that we have data and it's in the correct format
-      if (response.data && Array.isArray(response.data)) {
-        console.log('Data is a valid array. Setting delivery options state.')
-        console.log('Delivery options data structure:', JSON.stringify(response.data, null, 2))
-        
-        setDeliveryOptions(response.data)
-        console.log('Delivery options state updated successfully.')
-        
-      } else {
-        console.error('Data received from server is not a valid array. Triggering fallback.')
-        console.error('Received data type:', typeof response.data)
-        console.error('Is array check result:', Array.isArray(response.data))
-        
-        throw new Error('Invalid data format received from server - expected array')
+      setShowFallback(false)
+      console.log("Attempting to fetch delivery options using the new API service...")
+
+      const { data, error } = await invokeFunction('get-available-delivery-options')
+
+      if (error) {
+        // If the invokeFunction helper itself threw an error
+        throw new Error(error.message)
       }
 
-    } catch (error: any) {
-      console.error('Caught final error in delivery options fetch:', error.message)
+      // The helper already ensures data is parsed JSON. Now, validate its format.
+      if (!Array.isArray(data)) {
+        console.error("Data received from server is not a valid array:", data)
+        throw new Error('Received invalid data format from server.')
+      }
+
+      console.log("Success! Data is a valid array. Setting delivery options state.")
+      setDeliveryOptions(data) // Update the state
+
+    } catch (e: any) {
+      console.error("Final catch block: Failed to load delivery options.", e.message)
+      // This is where you trigger the fallback UI to show "using defaults"
+      setShowFallback(true)
       
-      // Show error message to user
-      setOptionsError('Unable to load delivery options from server. Using defaults.')
-      
-      // Use fallback options when the API fails or returns invalid data
+      // Set fallback delivery options
       const fallbackOptions: DeliveryOption[] = [
         { type: 'instant', label: 'Instant Delivery (30-45 min)', charge: 0 },
         { type: 'morning', label: 'Morning Delivery (Tomorrow 7 AM - 9 AM)', charge: 0 },
         { type: 'evening', label: 'Evening Delivery (Tomorrow 6 PM - 8 PM)', charge: 0 },
       ]
-      
       setDeliveryOptions(fallbackOptions)
-      console.log('Using fallback delivery options:', fallbackOptions)
-      
     } finally {
-      setIsLoadingOptions(false)
+      setIsLoadingOptions(false) // Hide the loading spinner
     }
   }
 
@@ -164,8 +143,9 @@ const CheckoutPage = () => {
 
     try {
       console.log('Calculating delivery charge...')
-      const { data, error } = await supabase.functions.invoke('calculate-delivery-charge', {
-        body: { p_customer_lat: deliveryLat, p_customer_lon: deliveryLng }
+      const { data, error } = await invokeFunction('calculate-delivery-charge', {
+        p_customer_lat: deliveryLat,
+        p_customer_lon: deliveryLng
       })
       
       if (error) throw error
@@ -180,72 +160,69 @@ const CheckoutPage = () => {
     }
   }
 
-  // REWRITTEN ORDER PLACEMENT FUNCTION
+  // NEW OPTIMISTIC UI ORDER PLACEMENT
   const handlePlaceOrder = async () => {
-    // Clear any previous errors
-    setOrderError(null)
-    
-    // Set loading state to disable button
+    // Validation
+    if (!customerName.trim() || !customerPhone.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in your name and phone number.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!selectedDeliveryOption) {
+      toast({
+        title: "Select Delivery Option",
+        description: "Please choose a delivery option to continue.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!deliveryLat || !deliveryLng || !deliveryLocationName) {
+      toast({
+        title: "Missing Location",
+        description: "Please select a delivery location.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Set loading state briefly
     setIsPlacingOrder(true)
 
-    try {
-      // Validation
-      if (!customerName.trim() || !customerPhone.trim()) {
-        throw new Error("Please fill in your name and phone number.")
-      }
-
-      if (!selectedDeliveryOption) {
-        throw new Error("Please choose a delivery option to continue.")
-      }
-
-      if (!deliveryLat || !deliveryLng || !deliveryLocationName) {
-        throw new Error("Please select a delivery location.")
-      }
-
-      // Prepare cart data
-      const p_cart = items.map(item => ({
+    // Prepare the complete payload
+    const payload = {
+      p_delivery_lat: deliveryLat,
+      p_delivery_lon: deliveryLng,
+      p_delivery_location_name: deliveryLocationName,
+      p_delivery_type: selectedDeliveryOption,
+      p_cart: items.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
         price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
-      }))
+      })),
+      p_customer_notes: customerNotes || null,
+    }
 
-      // Construct complete payload for authenticated order
-      const payload = {
-        p_delivery_lat: deliveryLat,
-        p_delivery_lon: deliveryLng,
-        p_delivery_location_name: deliveryLocationName,
-        p_delivery_type: selectedDeliveryOption,
-        p_cart: p_cart,
-        p_customer_notes: customerNotes || null,
-      }
-      
+    // IMMEDIATELY navigate to success page (optimistic UI)
+    navigate('/order-placed-successfully')
+
+    // Let the backend call happen in the background
+    try {
       console.log('Placing order with payload:', payload)
+      const result = await invokeFunction('create-authenticated-order', payload)
       
-      // Make the API call - will throw on non-2xx response
-      const response = await supabase.functions.invoke("create-authenticated-order", {
-        body: payload
-      })
-
-      // If we reach here, the order was successful
-      console.log('Order placed successfully:', response.data)
-      
-      // Navigate immediately to success page - cart will be cleared there
-      navigate('/order-placed-successfully')
-
-    } catch (error: any) {
-      console.error('Order placement error:', error)
-      
-      // Set error message for display
-      setOrderError("Order placement failed. Please review your details and try again.")
-      
-      // Show toast as well
-      toast({
-        title: "Order Failed",
-        description: "Order placement failed. Please review your details and try again.",
-        variant: "destructive",
-      })
+      if (result.error) {
+        console.error('Order placement failed in background:', result.error)
+      } else {
+        console.log('Order placed successfully in background:', result.data)
+      }
+    } catch (error) {
+      console.error('Background order placement error:', error)
     } finally {
-      // Re-enable the button
       setIsPlacingOrder(false)
     }
   }
@@ -273,16 +250,6 @@ const CheckoutPage = () => {
             </Button>
             <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
           </div>
-
-          {/* Order Error Alert */}
-          {orderError && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
-                {orderError}
-              </AlertDescription>
-            </Alert>
-          )}
 
           {/* Minimum order alert */}
           {!isMinimumOrderMet && minimumOrderValue > 0 && (
@@ -345,7 +312,7 @@ const CheckoutPage = () => {
                 </CardContent>
               </Card>
 
-              {/* Delivery Options - FIXED UI RENDERING */}
+              {/* Delivery Options */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -361,15 +328,16 @@ const CheckoutPage = () => {
                     </div>
                   ) : (
                     <>
-                      {optionsError && (
+                      {showFallback && (
                         <Alert className="mb-4 border-yellow-200 bg-yellow-50">
                           <AlertCircle className="h-4 w-4 text-yellow-600" />
-                          <AlertDescription className="text-yellow-700">{optionsError}</AlertDescription>
+                          <AlertDescription className="text-yellow-700">
+                            Using default delivery options
+                          </AlertDescription>
                         </Alert>
                       )}
                       
-                      {/* ROBUST UI RENDERING - Only show if we have valid delivery options */}
-                      {Array.isArray(deliveryOptions) && deliveryOptions.length > 0 ? (
+                      {deliveryOptions.length > 0 ? (
                         <RadioGroup
                           value={selectedDeliveryOption}
                           onValueChange={setSelectedDeliveryOption}

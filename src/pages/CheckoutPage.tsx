@@ -50,6 +50,7 @@ const CheckoutPage = () => {
   const [isLoadingDelivery, setIsLoadingDelivery] = useState(true)
   const [isLoadingShop, setIsLoadingShop] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showFallback, setShowFallback] = useState(false)
 
   // Calculations
   const subtotal = getSubtotal()
@@ -89,37 +90,38 @@ const CheckoutPage = () => {
   const fetchDeliveryOptions = async () => {
     try {
       setIsLoadingDelivery(true)
-      console.log('Fetching delivery options...')
+      setShowFallback(false)
+      console.log('Attempting to fetch delivery options using the new API service...')
       
-      const response = await invokeFunction('get-available-delivery-options')
+      const { data, error } = await invokeFunction('get-available-delivery-options')
 
-      console.log('Received response from get-available-delivery-options. Data:', response.data, 'Error:', response.error);
-
-      if (response.error) {
-        console.error('Error returned from invoke:', response.error)
-        throw response.error
+      if (error) {
+        // If the invokeFunction helper itself threw an error
+        throw new Error(error.message || 'Failed to fetch delivery options')
       }
 
-      console.log('Successfully received data from server. Type:', typeof response.data, 'IsArray:', Array.isArray(response.data))
-      console.log('Data content:', JSON.stringify(response.data, null, 2))
+      console.log('Received response from get-available-delivery-options. Data:', data, 'Error:', error)
 
-      if (response.data && Array.isArray(response.data)) {
-        console.log('Data is a valid array. Setting delivery options state.');
-        setDeliveryOptions(response.data);
-        
-        // Auto-select first option if available
-        if (response.data.length > 0) {
-          setSelectedDeliveryType(response.data[0].type)
-        }
-      } else {
-        console.error('Data received from server is not a valid array. Triggering fallback.');
+      // The helper already ensures data is parsed JSON. Now, validate its format.
+      if (!Array.isArray(data)) {
+        console.error('Data received from server is not a valid array:', data)
         throw new Error('Received invalid data format from server.')
+      }
+
+      console.log('Success! Data is a valid array. Setting delivery options state.')
+      setDeliveryOptions(data)
+      
+      // Auto-select first option if available
+      if (data.length > 0) {
+        setSelectedDeliveryType(data[0].type)
       }
 
       console.log('Delivery options state updated successfully.')
 
     } catch (error) {
-      console.error('Caught final error in delivery options fetch:', error.message)
+      console.error('Final catch block: Failed to load delivery options.', error.message)
+      // This is where you trigger the fallback UI to show "using defaults"
+      setShowFallback(true)
       toast({
         title: "Error loading delivery options",
         description: "Using default delivery options",
@@ -347,6 +349,11 @@ const CheckoutPage = () => {
               <CardTitle className="flex items-center space-x-2">
                 <Truck className="w-5 h-5" />
                 <span>Delivery Options</span>
+                {showFallback && (
+                  <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                    Using defaults
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>

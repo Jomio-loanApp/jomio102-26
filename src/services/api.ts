@@ -10,7 +10,17 @@ export async function invokeFunction(functionName: string, payload?: any) {
   if (platform === 'web') {
     // Use supabase.functions.invoke for web, as it handles CORS correctly there
     console.log('[API Service] Using supabase.functions.invoke for web.')
-    return await supabase.functions.invoke(functionName, { body: payload })
+    try {
+      const { data, error } = await supabase.functions.invoke(functionName, { body: payload })
+      
+      if (error) throw error
+      
+      console.log('[API Service] supabase.functions.invoke success. Data:', data)
+      return { data, error: null }
+    } catch (error) {
+      console.error('[API Service] supabase.functions.invoke failed:', error)
+      return { data: null, error }
+    }
   } else {
     // Use CapacitorHttp for native (android, ios), which bypasses CORS
     console.log('[API Service] Using CapacitorHttp for native mobile.')
@@ -33,11 +43,17 @@ export async function invokeFunction(functionName: string, payload?: any) {
     }
     
     try {
+      console.log('[API Service] Using CapacitorHttp.post with options:', { ...options, headers: { ...options.headers, Authorization: token ? 'Bearer HIDDEN_TOKEN' : undefined }})
       const response = await CapacitorHttp.post(options)
-      console.log('[API Service] CapacitorHttp response:', response)
-      // The CapacitorHttp response body is in `response.data`.
-      // We wrap it to match the structure of supabase.functions.invoke's response.
-      return { data: response.data, error: null }
+      console.log('[API Service] CapacitorHttp raw response:', response)
+      
+      // The response body from CapacitorHttp is in `response.data`.
+      // It might be a string, so we must ensure it's parsed to JSON.
+      const responseData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+      
+      console.log('[API Service] CapacitorHttp success. Parsed data:', responseData)
+      // Return the data in the same { data, error } format as the JS SDK for consistency.
+      return { data: responseData, error: null }
     } catch (error) {
       console.error('[API Service] CapacitorHttp error:', error)
       return { data: null, error: error }

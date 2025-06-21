@@ -12,6 +12,7 @@ import { Search, AlertCircle } from 'lucide-react'
 
 interface Product {
   product_id: string
+  id: string  // Add id property to match ProductCard expectations
   name: string
   description?: string
   price_string: string

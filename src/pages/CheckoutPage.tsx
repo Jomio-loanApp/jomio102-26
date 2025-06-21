@@ -4,478 +4,513 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useCartStore } from '@/stores/cartStore'
 import { useLocationStore } from '@/stores/locationStore'
-import { invokeFunction } from '@/services/api'
 import { supabase } from '@/lib/supabase'
 import Header from '@/components/Header'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Loader2, MapPin, User, Phone, CreditCard, Truck } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ArrowLeft, MapPin, Clock, CreditCard, ShoppingBag, Loader2, AlertCircle } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 interface DeliveryOption {
   type: string
-  name: string
-  description: string
-  price: number
-  estimated_time: string
-}
-
-interface ShopSettings {
-  minimum_order_value: number
-  shop_latitude: number
-  shop_longitude: number
-  shop_location_name: string
+  label: string
+  charge: number
+  estimated_time?: string
 }
 
 const CheckoutPage = () => {
   const navigate = useNavigate()
   const { user, profile } = useAuthStore()
-  const { items, getSubtotal, clearCart } = useCartStore()
+  const { items, getSubtotal } = useCartStore()
   const { deliveryLat, deliveryLng, deliveryLocationName } = useLocationStore()
 
-  // Form state
+  // Form states
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [selectedDeliveryType, setSelectedDeliveryType] = useState('')
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash_on_delivery')
+  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState('')
   const [customerNotes, setCustomerNotes] = useState('')
-
-  // Data state
+  
+  // Data states
   const [deliveryOptions, setDeliveryOptions] = useState<DeliveryOption[]>([])
-  const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null)
-  const [isLoadingDelivery, setIsLoadingDelivery] = useState(true)
-  const [isLoadingShop, setIsLoadingShop] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showFallback, setShowFallback] = useState(false)
-
-  // Calculations
-  const subtotal = getSubtotal()
-  const selectedOption = deliveryOptions.find(option => option.type === selectedDeliveryType)
-  const deliveryCharge = selectedOption?.price || 0
-  const total = subtotal + deliveryCharge
-
-  // Construct delivery location object
-  const deliveryLocation = deliveryLat && deliveryLng && deliveryLocationName ? {
-    latitude: deliveryLat,
-    longitude: deliveryLng,
-    address: deliveryLocationName
-  } : null
+  const [deliveryCharge, setDeliveryCharge] = useState(0)
+  const [minimumOrderValue, setMinimumOrderValue] = useState(0)
+  
+  // UI states
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false)
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+  const [optionsError, setOptionsError] = useState<string | null>(null)
+  const [orderError, setOrderError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Redirect if no items or location
     if (items.length === 0) {
       navigate('/cart')
       return
     }
-
-    if (!deliveryLocation) {
-      const redirectPath = user ? '/select-address' : '/set-delivery-location'
-      navigate(redirectPath)
+    
+    if (!deliveryLat || !deliveryLng || !deliveryLocationName) {
+      navigate('/set-delivery-location')
       return
     }
-
-    // Pre-fill form if user is authenticated
+    
+    // Initialize form with user data if available
     if (user && profile) {
       setCustomerName(profile.full_name || '')
       setCustomerPhone(profile.phone_number || '')
     }
+    
+    fetchInitialData()
+  }, [items.length, deliveryLat, deliveryLng, user, profile, navigate])
 
-    fetchDeliveryOptions()
-    fetchShopSettings()
-  }, [items, deliveryLocation, user, profile, navigate])
-
-  const fetchDeliveryOptions = async () => {
-    try {
-      setIsLoadingDelivery(true)
-      setShowFallback(false)
-      console.log('Attempting to fetch delivery options using the new API service...')
-      
-      const { data, error } = await invokeFunction('get-available-delivery-options')
-
-      if (error) {
-        // If the invokeFunction helper itself threw an error
-        throw new Error(error.message || 'Failed to fetch delivery options')
-      }
-
-      console.log('Received response from get-available-delivery-options. Data:', data, 'Error:', error)
-
-      // The helper already ensures data is parsed JSON. Now, validate its format.
-      if (!Array.isArray(data)) {
-        console.error('Data received from server is not a valid array:', data)
-        throw new Error('Received invalid data format from server.')
-      }
-
-      console.log('Success! Data is a valid array. Setting delivery options state.')
-      setDeliveryOptions(data)
-      
-      // Auto-select first option if available
-      if (data.length > 0) {
-        setSelectedDeliveryType(data[0].type)
-      }
-
-      console.log('Delivery options state updated successfully.')
-
-    } catch (error) {
-      console.error('Final catch block: Failed to load delivery options.', error.message)
-      // This is where you trigger the fallback UI to show "using defaults"
-      setShowFallback(true)
-      toast({
-        title: "Error loading delivery options",
-        description: "Using default delivery options",
-        variant: "destructive",
-      })
-      // Fallback delivery options
-      const fallbackOptions = [
-        {
-          type: 'instant',
-          name: 'Instant Delivery',
-          description: 'Get your order within 1-2 hours',
-          price: 50,
-          estimated_time: '1-2 hours'
-        }
-      ]
-      setDeliveryOptions(fallbackOptions)
-      setSelectedDeliveryType('instant')
-    } finally {
-      setIsLoadingDelivery(false)
+  useEffect(() => {
+    // Calculate delivery charge for instant delivery
+    if (selectedDeliveryOption === 'instant' && deliveryLat && deliveryLng) {
+      calculateDeliveryCharge()
+    } else {
+      setDeliveryCharge(0)
     }
+  }, [selectedDeliveryOption, deliveryLat, deliveryLng])
+
+  const fetchInitialData = async () => {
+    await Promise.all([
+      fetchShopSettings(),
+      fetchDeliveryOptions()
+    ])
   }
 
   const fetchShopSettings = async () => {
     try {
-      setIsLoadingShop(true)
+      console.log('Fetching shop settings...')
       const { data, error } = await supabase
         .from('shop_settings')
-        .select('minimum_order_value, shop_latitude, shop_longitude, shop_location_name')
+        .select('minimum_order_value')
         .single()
 
       if (error) throw error
-      setShopSettings(data)
+      
+      setMinimumOrderValue(data?.minimum_order_value || 0)
+      console.log('Shop settings loaded:', data)
     } catch (error) {
       console.error('Error fetching shop settings:', error)
-    } finally {
-      setIsLoadingShop(false)
+      setMinimumOrderValue(0)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // COMPLETELY REWRITTEN DELIVERY OPTIONS FETCH WITH ROBUST VALIDATION
+  const fetchDeliveryOptions = async () => {
+    try {
+      setIsLoadingOptions(true)
+      setOptionsError(null)
+      
+      console.log('Fetching delivery options...')
+      
+      // Call the Edge Function with proper error handling
+      const response = await supabase.functions.invoke('get-available-delivery-options')
+      
+      // Log the raw response to debug what we're receiving
+      console.log('Received response from get-available-delivery-options. Data:', response.data, 'Error:', response.error)
+      
+      // Check for invocation errors first
+      if (response.error) {
+        console.error('Error returned from Edge Function invoke:', response.error)
+        throw new Error(`Edge Function error: ${response.error.message || 'Unknown error'}`)
+      }
+      
+      // Validate that we have data and it's in the correct format
+      if (response.data && Array.isArray(response.data)) {
+        console.log('Data is a valid array. Setting delivery options state.')
+        console.log('Delivery options data structure:', JSON.stringify(response.data, null, 2))
+        
+        setDeliveryOptions(response.data)
+        console.log('Delivery options state updated successfully.')
+        
+      } else {
+        console.error('Data received from server is not a valid array. Triggering fallback.')
+        console.error('Received data type:', typeof response.data)
+        console.error('Is array check result:', Array.isArray(response.data))
+        
+        throw new Error('Invalid data format received from server - expected array')
+      }
 
-    if (!customerName.trim() || !customerPhone.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in your name and phone number",
-        variant: "destructive",
-      })
-      return
+    } catch (error: any) {
+      console.error('Caught final error in delivery options fetch:', error.message)
+      
+      // Show error message to user
+      setOptionsError('Unable to load delivery options from server. Using defaults.')
+      
+      // Use fallback options when the API fails or returns invalid data
+      const fallbackOptions: DeliveryOption[] = [
+        { type: 'instant', label: 'Instant Delivery (30-45 min)', charge: 0 },
+        { type: 'morning', label: 'Morning Delivery (Tomorrow 7 AM - 9 AM)', charge: 0 },
+        { type: 'evening', label: 'Evening Delivery (Tomorrow 6 PM - 8 PM)', charge: 0 },
+      ]
+      
+      setDeliveryOptions(fallbackOptions)
+      console.log('Using fallback delivery options:', fallbackOptions)
+      
+    } finally {
+      setIsLoadingOptions(false)
     }
+  }
 
-    if (!selectedDeliveryType) {
-      toast({
-        title: "Select Delivery Option",
-        description: "Please choose a delivery option",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!deliveryLocation) {
-      toast({
-        title: "Missing Delivery Location",
-        description: "Please set your delivery location",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (shopSettings && subtotal < shopSettings.minimum_order_value) {
-      toast({
-        title: "Minimum Order Not Met",
-        description: `Minimum order value is ₹${shopSettings.minimum_order_value}`,
-        variant: "destructive",
-      })
-      return
-    }
+  const calculateDeliveryCharge = async () => {
+    if (!deliveryLat || !deliveryLng) return
 
     try {
-      setIsSubmitting(true)
-
-      const orderData = {
-        customer_profile_id: user?.id || null,
-        guest_customer_name: !user ? customerName : null,
-        guest_customer_phone: !user ? customerPhone : null,
-        items: items.map(item => {
-          const numericPrice = parseFloat(item.price_string.replace(/[^\d.]/g, '')) || 0
-          return {
-            product_id: item.product_id,
-            quantity: item.quantity,
-            price_at_purchase: numericPrice
-          }
-        }),
-        items_subtotal: subtotal,
-        delivery_charge: deliveryCharge,
-        total_amount: total,
-        delivery_latitude: deliveryLocation.latitude,
-        delivery_longitude: deliveryLocation.longitude,
-        delivery_location_name: deliveryLocation.address,
-        delivery_type: selectedDeliveryType,
-        customer_notes: customerNotes.trim() || null,
-        payment_method: selectedPaymentMethod,
-        shop_location_at_order_time_lat: shopSettings?.shop_latitude || null,
-        shop_location_at_order_time_lon: shopSettings?.shop_longitude || null,
-        shop_location_at_order_time_name: shopSettings?.shop_location_name || null
-      }
-
-      console.log('Placing order with data:', orderData)
-
-      const response = await invokeFunction('place-order', orderData)
-
-      if (response.error) {
-        throw response.error
-      }
-
-      console.log('Order placed successfully:', response.data)
-
-      // Clear cart and redirect to success page
-      clearCart()
-      navigate('/order-placed-successfully')
-
-    } catch (error) {
-      console.error('Error placing order:', error)
-      toast({
-        title: "Order Failed",
-        description: error.message || "Failed to place order. Please try again.",
-        variant: "destructive",
+      console.log('Calculating delivery charge...')
+      const { data, error } = await supabase.functions.invoke('calculate-delivery-charge', {
+        body: { p_customer_lat: deliveryLat, p_customer_lon: deliveryLng }
       })
-    } finally {
-      setIsSubmitting(false)
+      
+      if (error) throw error
+      
+      setDeliveryCharge(data?.delivery_charge || 0)
+      console.log('Delivery charge calculated:', data)
+    } catch (error) {
+      console.error('Error calculating delivery charge:', error)
+      const fallbackCharge = 25
+      setDeliveryCharge(fallbackCharge)
+      console.log('Using fallback delivery charge:', fallbackCharge)
     }
   }
 
-  if (isLoadingDelivery || isLoadingShop) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showSearch={false} />
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            {[...Array(4)].map((_, index) => (
-              <div key={index} className="bg-white p-6 rounded-lg border">
-                <div className="space-y-4">
-                  <div className="h-6 bg-gray-200 rounded w-1/4"></div>
-                  <div className="h-20 bg-gray-200 rounded"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
+  // REWRITTEN ORDER PLACEMENT FUNCTION
+  const handlePlaceOrder = async () => {
+    // Clear any previous errors
+    setOrderError(null)
+    
+    // Set loading state to disable button
+    setIsPlacingOrder(true)
+
+    try {
+      // Validation
+      if (!customerName.trim() || !customerPhone.trim()) {
+        throw new Error("Please fill in your name and phone number.")
+      }
+
+      if (!selectedDeliveryOption) {
+        throw new Error("Please choose a delivery option to continue.")
+      }
+
+      if (!deliveryLat || !deliveryLng || !deliveryLocationName) {
+        throw new Error("Please select a delivery location.")
+      }
+
+      // Prepare cart data
+      const p_cart = items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price_at_purchase: parseFloat(item.price_string.replace(/[^\d.]/g, '')),
+      }))
+
+      // Construct complete payload for authenticated order
+      const payload = {
+        p_delivery_lat: deliveryLat,
+        p_delivery_lon: deliveryLng,
+        p_delivery_location_name: deliveryLocationName,
+        p_delivery_type: selectedDeliveryOption,
+        p_cart: p_cart,
+        p_customer_notes: customerNotes || null,
+      }
+      
+      console.log('Placing order with payload:', payload)
+      
+      // Make the API call - will throw on non-2xx response
+      const response = await supabase.functions.invoke("create-authenticated-order", {
+        body: payload
+      })
+
+      // If we reach here, the order was successful
+      console.log('Order placed successfully:', response.data)
+      
+      // Navigate immediately to success page - cart will be cleared there
+      navigate('/order-placed-successfully')
+
+    } catch (error: any) {
+      console.error('Order placement error:', error)
+      
+      // Set error message for display
+      setOrderError("Order placement failed. Please review your details and try again.")
+      
+      // Show toast as well
+      toast({
+        title: "Order Failed",
+        description: "Order placement failed. Please review your details and try again.",
+        variant: "destructive",
+      })
+    } finally {
+      // Re-enable the button
+      setIsPlacingOrder(false)
+    }
   }
+
+  const subtotal = getSubtotal()
+  const total = subtotal + deliveryCharge
+  const isMinimumOrderMet = subtotal >= minimumOrderValue
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header showSearch={false} />
       
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-20 md:pb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Checkout</h1>
+      {/* Desktop-constrained container */}
+      <div className="w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center space-x-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="p-2"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Customer Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <User className="w-5 h-5" />
-                <span>Customer Details</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name *</Label>
-                <Input
-                  id="name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Enter your full name"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number *</Label>
-                <Input
-                  id="phone"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Enter your phone number"
-                  required
-                />
-              </div>
-            </CardContent>
-          </Card>
+          {/* Order Error Alert */}
+          {orderError && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                {orderError}
+              </AlertDescription>
+            </Alert>
+          )}
 
-          {/* Delivery Address */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <MapPin className="w-5 h-5" />
-                <span>Delivery Address</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600">
-                {deliveryLocation?.address}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const redirectPath = user ? '/select-address' : '/set-delivery-location'
-                  navigate(redirectPath)
-                }}
-                className="mt-2"
-              >
-                Change Address
-              </Button>
-            </CardContent>
-          </Card>
+          {/* Minimum order alert */}
+          {!isMinimumOrderMet && minimumOrderValue > 0 && (
+            <Alert className="border-yellow-200 bg-yellow-50">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                Minimum order value is ₹{minimumOrderValue.toFixed(2)}. Add ₹{(minimumOrderValue - subtotal).toFixed(2)} more to proceed.
+              </AlertDescription>
+            </Alert>
+          )}
 
-          {/* Delivery Options */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Truck className="w-5 h-5" />
-                <span>Delivery Options</span>
-                {showFallback && (
-                  <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                    Using defaults
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup value={selectedDeliveryType} onValueChange={setSelectedDeliveryType}>
-                {deliveryOptions.map((option) => (
-                  <div key={option.type} className="flex items-center space-x-2 p-3 border rounded-lg">
-                    <RadioGroupItem value={option.type} id={option.type} />
-                    <div className="flex-1">
-                      <label htmlFor={option.type} className="cursor-pointer">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium">{option.name}</p>
-                            <p className="text-sm text-gray-600">{option.description}</p>
-                            <p className="text-xs text-gray-500">{option.estimated_time}</p>
-                          </div>
-                          <p className="font-semibold text-green-600">₹{option.price}</p>
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Left Column - Forms */}
+            <div className="space-y-6">
+              {/* Customer Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name *</Label>
+                    <Input
+                      id="name"
+                      placeholder="Enter your full name"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number *</Label>
+                    <Input
+                      id="phone"
+                      placeholder="Enter your phone number"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Delivery Address */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <MapPin className="w-5 h-5" />
+                    <span>Delivery Address</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600">{deliveryLocationName}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => navigate('/set-delivery-location')}
+                  >
+                    Change Address
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Delivery Options - FIXED UI RENDERING */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Clock className="w-5 h-5" />
+                    <span>Delivery Options</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingOptions ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      <span className="ml-2 text-sm text-gray-600">Loading delivery options...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {optionsError && (
+                        <Alert className="mb-4 border-yellow-200 bg-yellow-50">
+                          <AlertCircle className="h-4 w-4 text-yellow-600" />
+                          <AlertDescription className="text-yellow-700">{optionsError}</AlertDescription>
+                        </Alert>
+                      )}
+                      
+                      {/* ROBUST UI RENDERING - Only show if we have valid delivery options */}
+                      {Array.isArray(deliveryOptions) && deliveryOptions.length > 0 ? (
+                        <RadioGroup
+                          value={selectedDeliveryOption}
+                          onValueChange={setSelectedDeliveryOption}
+                          className="space-y-3"
+                        >
+                          {deliveryOptions.map((option) => (
+                            <div key={option.type} className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50">
+                              <RadioGroupItem value={option.type} id={option.type} />
+                              <Label htmlFor={option.type} className="flex-1 cursor-pointer">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium">{option.label}</span>
+                                  {option.type === 'instant' && selectedDeliveryOption === 'instant' && deliveryCharge > 0 && (
+                                    <span className="text-sm text-green-600 font-medium">
+                                      +₹{deliveryCharge.toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      ) : (
+                        <div className="text-center py-4">
+                          <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">No delivery options available</p>
                         </div>
-                      </label>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Order Notes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Special Instructions (Optional)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    placeholder="Any special delivery instructions..."
+                    value={customerNotes}
+                    onChange={(e) => setCustomerNotes(e.target.value)}
+                    rows={3}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Order Summary */}
+            <div className="space-y-6">
+              {/* Order Items */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <ShoppingBag className="w-5 h-5" />
+                    <span>Order Summary</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {items.map((item) => (
+                    <div key={item.product_id} className="flex items-center space-x-3">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <span>📦</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
+                        <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                      </div>
+                      <div className="text-sm font-semibold">
+                        ₹{(parseFloat(item.price_string.replace(/[^\d.]/g, '')) * item.quantity).toFixed(2)}
+                      </div>
                     </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Bill Summary */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Bill Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>₹{subtotal.toFixed(2)}</span>
                   </div>
-                ))}
-              </RadioGroup>
-            </CardContent>
-          </Card>
-
-          {/* Order Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {items.map((item) => {
-                const numericPrice = parseFloat(item.price_string.replace(/[^\d.]/g, '')) || 0
-                return (
-                  <div key={item.product_id} className="flex justify-between items-center">
-                    <div className="flex-1">
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-sm text-gray-600">
-                        {item.quantity} × {item.price_string}
-                      </p>
-                    </div>
-                    <p className="font-semibold">
-                      ₹{(numericPrice * item.quantity).toFixed(2)}
-                    </p>
+                  <div className="flex justify-between">
+                    <span>Delivery Charge:</span>
+                    <span>₹{deliveryCharge.toFixed(2)}</span>
                   </div>
-                )
-              })}
-            </CardContent>
-          </Card>
+                  <Separator />
+                  <div className="flex justify-between text-lg font-semibold">
+                    <span>Total:</span>
+                    <span className="text-green-600">₹{total.toFixed(2)}</span>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Bill Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Bill Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>₹{subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Delivery Charges</span>
-                <span>₹{deliveryCharge.toFixed(2)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between font-semibold text-lg">
-                <span>Total</span>
-                <span className="text-green-600">₹{total.toFixed(2)}</span>
-              </div>
-            </CardContent>
-          </Card>
+              {/* Payment Method */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <CreditCard className="w-5 h-5" />
+                    <span>Payment Method</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600">Cash on Delivery</p>
+                </CardContent>
+              </Card>
 
-          {/* Payment Method */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <CreditCard className="w-5 h-5" />
-                <span>Payment Method</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="cash_on_delivery" id="cod" />
-                  <label htmlFor="cod" className="cursor-pointer">Cash on Delivery</label>
-                </div>
-              </RadioGroup>
-            </CardContent>
-          </Card>
-
-          {/* Customer Notes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Special Instructions (Optional)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <textarea
-                value={customerNotes}
-                onChange={(e) => setCustomerNotes(e.target.value)}
-                placeholder="Any special instructions for delivery..."
-                className="w-full p-3 border border-gray-300 rounded-lg resize-none h-20"
-              />
-            </CardContent>
-          </Card>
-
-          {/* Place Order Button */}
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full bg-green-600 hover:bg-green-700"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Placing Order...
-              </>
-            ) : (
-              `Place Order - ₹${total.toFixed(2)}`
-            )}
-          </Button>
-        </form>
+              {/* Place Order Button */}
+              <Button
+                onClick={handlePlaceOrder}
+                disabled={isPlacingOrder || !selectedDeliveryOption || !isMinimumOrderMet}
+                className="w-full"
+                style={{ backgroundColor: '#23b14d' }}
+                size="lg"
+              >
+                {isPlacingOrder ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Placing Order...
+                  </>
+                ) : (
+                  `Place Order - ₹{total.toFixed(2)}`
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -14,11 +14,11 @@ interface Product {
   product_id: string
   id: string
   name: string
-  description: string | null  // Make required to match ProductQuickView interface
+  description: string | null
   price_string: string
   numeric_price: number
   unit_type: string
-  image_url?: string
+  image_url: string | null  // Make required to match ProductQuickView interface
   category_id?: string
   is_active: boolean
   availability_status: string

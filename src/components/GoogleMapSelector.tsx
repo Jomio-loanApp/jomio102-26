@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, MapPin } from "lucide-react";
+import { Loader2, MapPin, Navigation } from "lucide-react";
 
 interface GoogleMapSelectorProps {
   onLocationSelected: (lat: number, lng: number, address: string) => void;
@@ -40,26 +40,27 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
-  const [markerLat, setMarkerLat] = useState(initialLat);
-  const [markerLng, setMarkerLng] = useState(initialLng);
   const [address, setAddress] = useState("");
   const [isLocating, setIsLocating] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const autocompleteRef = useRef<HTMLInputElement>(null);
+  const mapInstanceRef = useRef<any>(null);
 
   useEffect(() => {
     loadGoogleMaps(() => {
       if (!mapRef.current) return;
 
       // @ts-ignore
-      const map = new window.google.maps.Map(mapRef.current, {
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: initialLat, lng: initialLng },
         zoom: 16,
         disableDefaultUI: true,
         zoomControl: true,
+        // FIXED: Enable single-finger pan on mobile
+        gestureHandling: 'greedy', // This allows single-finger pan
+        clickableIcons: false,
       });
 
-      // Create one marker, hidden (we will use pin overlay instead)
       // Add search box
       if (autocompleteRef.current) {
         // @ts-ignore
@@ -69,7 +70,7 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
           if (place.geometry && place.geometry.location) {
             const lat = place.geometry.location.lat();
             const lng = place.geometry.location.lng();
-            map.setCenter({ lat, lng });
+            mapInstanceRef.current.setCenter({ lat, lng });
             handlePositionChange(lat, lng);
           }
         });
@@ -77,12 +78,12 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
 
       let timeout: NodeJS.Timeout;
 
-      // Center pin: use the center of the map, not a marker
-      map.addListener("idle", () => {
+      // FIXED: Use center of map for "fixed pin" interaction
+      mapInstanceRef.current.addListener("idle", () => {
         clearTimeout(timeout);
-        // Debounce to avoid too-rapid API calls.
+        // Debounce to avoid too-rapid API calls
         timeout = setTimeout(() => {
-          const center = map.getCenter();
+          const center = mapInstanceRef.current.getCenter();
           if (center) {
             const lat = center.lat();
             const lng = center.lng();
@@ -96,7 +97,7 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
       setIsReady(true);
     });
 
-    // Cleanup on unmount.
+    // Cleanup on unmount
     return () => {
       setIsReady(false);
     };
@@ -104,9 +105,6 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
   }, []);
 
   const handlePositionChange = async (lat: number, lng: number) => {
-    setMarkerLat(lat);
-    setMarkerLng(lng);
-
     // Reverse geocode
     if (window.google && window.google.maps) {
       const geocoder = new window.google.maps.Geocoder();
@@ -128,12 +126,8 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
       (res) => {
         const lat = res.coords.latitude;
         const lng = res.coords.longitude;
-        setMarkerLat(lat);
-        setMarkerLng(lng);
-        if (window.google && window.google.maps && mapRef.current) {
-          // @ts-ignore
-          const map = new window.google.maps.Map(mapRef.current);
-          map.setCenter({ lat, lng });
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.setCenter({ lat, lng });
         }
         handlePositionChange(lat, lng);
         setIsLocating(false);
@@ -146,37 +140,62 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
   };
 
   return (
-    <div className="w-full flex flex-col gap-3">
-      <div className="flex gap-2 items-center">
-        <input
-          ref={autocompleteRef}
-          placeholder="Search for a place…"
-          className="flex-1 border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600 text-base"
-          value={inputValue}
-          onChange={e => setInputValue(e.target.value)}
-        />
-        <Button
-          onClick={handleUseCurrentLocation}
-          disabled={isLocating}
-          type="button"
-          variant="outline"
-        >
-          {isLocating ? <Loader2 className="mr-1 w-4 h-4 animate-spin" /> : <span className="mr-1">📍</span>}
-          Use Current Location
-        </Button>
-      </div>
-      <div className="relative rounded-md overflow-hidden border h-[380px]">
-        {/* Actual map */}
-        <div ref={mapRef} style={{ height: "100%", width: "100%" }} />
-        {/* Fixed pin on map center */}
-        {isReady && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full z-10">
-            <MapPin className="text-green-700 w-10 h-10 drop-shadow-lg" fill="currentColor" />
+    <div className="h-full w-full flex flex-col">
+      {/* Search and Controls - positioned at top */}
+      <div className="absolute top-4 left-4 right-4 z-20 bg-white rounded-lg shadow-lg p-3 space-y-3">
+        <div className="flex flex-col space-y-2">
+          <input
+            ref={autocompleteRef}
+            placeholder="Search for a place…"
+            className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600 text-base"
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+          />
+          <Button
+            onClick={handleUseCurrentLocation}
+            disabled={isLocating}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+          >
+            {isLocating ? (
+              <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+            ) : (
+              <Navigation className="mr-2 w-4 h-4" />
+            )}
+            Use Current Location
+          </Button>
+        </div>
+        
+        {address && (
+          <div className="bg-green-50 px-3 py-2 rounded text-green-900 text-sm border border-green-200">
+            <b>Selected:</b> {address}
           </div>
         )}
       </div>
-      <div className="bg-green-50 px-4 py-2 rounded text-green-900 text-sm border border-green-200 shadow-sm">
-        <b>Selected:</b> {address || "Move map to pick location"}
+
+      {/* FIXED: Map container with relative positioning for fixed pin */}
+      <div className="relative h-full w-full">
+        {/* Actual map */}
+        <div ref={mapRef} className="h-full w-full" />
+        
+        {/* FIXED: Static centered pin that doesn't move */}
+        {isReady && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-full z-10 pointer-events-none">
+            <MapPin className="text-red-600 w-8 h-8 drop-shadow-lg" fill="currentColor" />
+          </div>
+        )}
+        
+        {/* Loading overlay */}
+        {!isReady && (
+          <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-30">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-gray-400" />
+              <p className="text-sm text-gray-600">Loading map...</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

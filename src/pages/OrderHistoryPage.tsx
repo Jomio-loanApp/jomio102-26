@@ -36,6 +36,7 @@ const OrderHistoryPage = () => {
   const [orderItems, setOrderItems] = useState<Record<string, OrderItem[]>>({})
   const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({})
 
+  // FIXED: Auto-fetch data on component mount
   useEffect(() => {
     if (!user) {
       navigate('/profile')
@@ -51,7 +52,7 @@ const OrderHistoryPage = () => {
       
       console.log('Fetching orders for user:', user?.id)
       
-      // FIXED QUERY: Using correct columns as per Backend Schema
+      // FIXED: Fetch only summary data initially
       const { data, error } = await supabase
         .from('orders')
         .select('order_id, ordered_at, status, total_amount, delivery_type, delivery_location_name')
@@ -73,6 +74,7 @@ const OrderHistoryPage = () => {
     }
   }
 
+  // FIXED: Secondary fetch for order items only when "See Details" is clicked
   const fetchOrderItems = async (orderId: string) => {
     if (orderItems[orderId] || loadingItems[orderId]) return
 
@@ -100,6 +102,7 @@ const OrderHistoryPage = () => {
     }
   }
 
+  // FIXED: Toggle details and fetch items on expand
   const toggleOrderDetails = (orderId: string) => {
     const isExpanded = expandedOrders[orderId]
     setExpandedOrders(prev => ({ ...prev, [orderId]: !isExpanded }))
@@ -237,6 +240,7 @@ const OrderHistoryPage = () => {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* FIXED: Summary list view first */}
             {orders.map((order) => (
               <Card key={order.order_id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
@@ -245,8 +249,8 @@ const OrderHistoryPage = () => {
                       <CardTitle className="text-sm font-medium text-gray-600">
                         Order #{order.order_id}
                       </CardTitle>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {format(new Date(order.ordered_at), 'MMM dd, yyyy • h:mm a')}
+                      <p className="text-lg font-semibold text-green-600 mt-1">
+                        ₹{order.total_amount.toFixed(2)}
                       </p>
                     </div>
                     <Badge className={getStatusColor(order.status)}>
@@ -255,63 +259,64 @@ const OrderHistoryPage = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Total Amount:</span>
-                      <span className="font-semibold text-green-600">₹{order.total_amount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Delivery Type:</span>
-                      <span className="text-sm">{formatDeliveryType(order.delivery_type)}</span>
-                    </div>
-                    
-                    {/* See Details Section */}
-                    <Collapsible 
-                      open={expandedOrders[order.order_id]} 
-                      onOpenChange={() => toggleOrderDetails(order.order_id)}
-                    >
-                      <CollapsibleTrigger asChild>
-                        <Button variant="outline" size="sm" className="w-full mt-3">
-                          <span>See Details</span>
-                          {expandedOrders[order.order_id] ? (
-                            <ChevronUp className="w-4 h-4 ml-2" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 ml-2" />
-                          )}
-                        </Button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 mt-3 pt-3 border-t">
+                  {/* FIXED: "See Details" expandable section */}
+                  <Collapsible 
+                    open={expandedOrders[order.order_id]} 
+                    onOpenChange={() => toggleOrderDetails(order.order_id)}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full">
+                        <span>See Details</span>
+                        {expandedOrders[order.order_id] ? (
+                          <ChevronUp className="w-4 h-4 ml-2" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 ml-2" />
+                        )}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-3 mt-3 pt-3 border-t">
+                      {/* FIXED: Show other order details when expanded */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Date Placed:</span>
+                          <span className="text-sm">{format(new Date(order.ordered_at), 'MMM dd, yyyy • h:mm a')}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Delivery Type:</span>
+                          <span className="text-sm">{formatDeliveryType(order.delivery_type)}</span>
+                        </div>
                         {order.delivery_location_name && (
                           <div className="flex justify-between items-start">
-                            <span className="text-sm text-gray-600">Delivery Location:</span>
+                            <span className="text-sm text-gray-600">Delivery Address:</span>
                             <span className="text-sm text-right max-w-xs">{order.delivery_location_name}</span>
                           </div>
                         )}
-                        
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">Order Items:</h4>
-                          {loadingItems[order.order_id] ? (
-                            <div className="space-y-2">
-                              {[...Array(3)].map((_, i) => (
-                                <Skeleton key={i} className="h-4 w-full" />
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {orderItems[order.order_id]?.map((item, index) => (
-                                <div key={index} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
-                                  <span>{item.quantity}x {item.product_name_at_purchase}</span>
-                                  <span className="font-medium">₹{(item.price_at_purchase * item.quantity).toFixed(2)}</span>
-                                </div>
-                              )) || (
-                                <p className="text-sm text-gray-500">No items found for this order</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
+                      </div>
+                      
+                      {/* FIXED: Show order items */}
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-900 mb-2">Order Items:</h4>
+                        {loadingItems[order.order_id] ? (
+                          <div className="space-y-2">
+                            {[...Array(3)].map((_, i) => (
+                              <Skeleton key={i} className="h-4 w-full" />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {orderItems[order.order_id]?.map((item, index) => (
+                              <div key={index} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
+                                <span>{item.quantity}x {item.product_name_at_purchase}</span>
+                                <span className="font-medium">₹{(item.price_at_purchase * item.quantity).toFixed(2)}</span>
+                              </div>
+                            )) || (
+                              <p className="text-sm text-gray-500">No items found for this order</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </CardContent>
               </Card>
             ))}

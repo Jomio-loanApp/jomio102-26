@@ -58,8 +58,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ user: session.user })
           await get().refreshProfile()
           
-          // FIXED: No popup for cart merging - guest cart is automatically preserved
-          console.log('User signed in - guest cart will be preserved automatically')
+          // FIXED: Silent cart preservation - no popup, no disruption
+          console.log('User signed in - guest cart automatically preserved in local storage')
           
         } else if (event === 'SIGNED_OUT') {
           set({ user: null, profile: null })
@@ -88,6 +88,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().refreshProfile()
       
       console.log('User signed in successfully:', data.user?.id)
+      // FIXED: Guest cart is automatically preserved in localStorage via Zustand persistence
+      // No popup, no data loss, seamless transition
     } catch (error) {
       console.error('Error signing in:', error)
       throw error
@@ -130,6 +132,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       
       console.log('User signed up successfully:', data.user?.id)
+      // FIXED: Guest cart is automatically preserved in localStorage via Zustand persistence
+      // No popup, no data loss, seamless transition
     } catch (error) {
       console.error('Error signing up:', error)
       throw error

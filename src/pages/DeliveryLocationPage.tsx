@@ -91,52 +91,60 @@ const DeliveryLocationPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen bg-gray-50 flex flex-col">
       <Header showSearch={false} />
-      <div className="max-w-2xl mx-auto my-10 px-4 pb-20">
-        <h1 className="text-2xl font-bold mb-1 text-center">Set Delivery Location</h1>
-        <p className="text-center mb-4 text-gray-600">
-          Search for your address, use your current location, or move the map pin.
-        </p>
-        <div className="rounded-xl border bg-white shadow p-4">
-          <h2 className="font-semibold text-lg flex items-center mb-2 gap-2">
-            <span className="inline-block">📍</span> Choose Location
-          </h2>
+      
+      {/* FIXED: Non-scrolling layout with flex-direction: column */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Section: Static controls that don't scroll */}
+        <div className="flex-shrink-0 p-4 bg-white border-b">
+          <div className="max-w-2xl mx-auto">
+            <h1 className="text-2xl font-bold mb-1 text-center">Set Delivery Location</h1>
+            <p className="text-center mb-4 text-gray-600">
+              Search for your address, use your current location, or move the map pin.
+            </p>
+            
+            {/* Authenticated user input: Save address as */}
+            {showNicknameField && (
+              <div className="mb-4">
+                <label htmlFor="address-nickname" className="block text-sm font-medium text-gray-700">
+                  Save address as <span className="text-red-600">*</span>
+                </label>
+                <input
+                  id="address-nickname"
+                  required
+                  type="text"
+                  minLength={2}
+                  value={addressNickname}
+                  onChange={(e) => setAddressNickname(e.target.value)}
+                  placeholder="Home, Work, Mom's House"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600"
+                  disabled={isSaving}
+                />
+                {nicknameError && (
+                  <div className="text-xs text-red-600 mt-1">{nicknameError}</div>
+                )}
+                <div className="text-xs text-gray-500 mt-1">Help yourself remember: Give addresses a friendly label for future orders.</div>
+              </div>
+            )}
+            
+            <Button
+              className="w-full text-base"
+              size="lg"
+              onClick={handleConfirm}
+              disabled={!selected || isSaving}
+            >
+              {isSaving ? "Saving..." : "Confirm Location & Proceed"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Bottom Section: Map that fills remaining space */}
+        <div className="flex-1 relative">
           <GoogleMapSelector
             onLocationSelected={(lat, lng, address) => setSelected({ lat, lng, address })}
           />
-          {/* Authenticated user input: Save address as */}
-          {showNicknameField && (
-            <div className="mt-4">
-              <label htmlFor="address-nickname" className="block text-sm font-medium text-gray-700">
-                Save address as <span className="text-red-600">*</span>
-              </label>
-              <input
-                id="address-nickname"
-                required
-                type="text"
-                minLength={2}
-                value={addressNickname}
-                onChange={(e) => setAddressNickname(e.target.value)}
-                placeholder="Home, Work, Mom's House"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600"
-                disabled={isSaving}
-              />
-              {nicknameError && (
-                <div className="text-xs text-red-600 mt-1">{nicknameError}</div>
-              )}
-              <div className="text-xs text-gray-500 mt-1">Help yourself remember: Give addresses a friendly label for future orders.</div>
-            </div>
-          )}
         </div>
-        <Button
-          className="w-full mt-6 text-base"
-          size="lg"
-          onClick={handleConfirm}
-          disabled={!selected || isSaving}
-        >
-          {isSaving ? "Saving..." : "Confirm Location & Proceed"}
-        </Button>
       </div>
     </div>
   );

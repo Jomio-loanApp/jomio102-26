@@ -1,8 +1,6 @@
 
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
-import { useCartStore } from '@/stores/cartStore'
-import { useWishlistStore } from '@/stores/wishlistStore'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from '@/hooks/use-toast'
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
 
 interface LoginModalProps {
   isOpen: boolean
@@ -20,8 +18,6 @@ interface LoginModalProps {
 
 const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   const { signIn, signUp } = useAuthStore()
-  const { items: cartItems, clearCart } = useCartStore()
-  const { items: wishlistItems, clearWishlist } = useWishlistStore()
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('login')
   const [error, setError] = useState<string | null>(null)
@@ -37,8 +33,6 @@ const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
     fullName: '',
     phoneNumber: '',
   })
-
-  const [showMergePrompt, setShowMergePrompt] = useState(false)
 
   const resetForm = () => {
     setError(null)
@@ -57,18 +51,14 @@ const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
       await signIn(loginData.email, loginData.password)
       console.log('LoginModal: Login successful')
       
-      // Check if user has guest data to merge
-      if (cartItems.length > 0 || wishlistItems.length > 0) {
-        setShowMergePrompt(true)
-      } else {
-        resetForm()
-        onClose()
-        onSuccess?.()
-        toast({
-          title: "Welcome back!",
-          description: "You have successfully logged in.",
-        })
-      }
+      // FIXED: No popup, no merge prompt - cart is automatically preserved
+      resetForm()
+      onClose()
+      onSuccess?.()
+      toast({
+        title: "Welcome back!",
+        description: "You have successfully logged in. Your cart has been preserved.",
+      })
     } catch (error: any) {
       console.error('LoginModal: Login error:', error)
       setError(error.message || "An error occurred during login")
@@ -92,18 +82,14 @@ const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
       await signUp(signupData.email, signupData.password, signupData.fullName, signupData.phoneNumber)
       console.log('LoginModal: Signup successful')
       
-      // Check if user has guest data to merge
-      if (cartItems.length > 0 || wishlistItems.length > 0) {
-        setShowMergePrompt(true)
-      } else {
-        resetForm()
-        onClose()
-        onSuccess?.()
-        toast({
-          title: "Account created!",
-          description: "Please check your email to verify your account.",
-        })
-      }
+      // FIXED: No popup, no merge prompt - cart is automatically preserved
+      resetForm()
+      onClose()
+      onSuccess?.()
+      toast({
+        title: "Account created!",
+        description: "Please check your email to verify your account. Your cart has been preserved.",
+      })
     } catch (error: any) {
       console.error('LoginModal: Signup error:', error)
       setError(error.message || "An error occurred during signup")
@@ -117,25 +103,6 @@ const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
     }
   }
 
-  const handleMergeData = (merge: boolean) => {
-    if (!merge) {
-      clearCart()
-      clearWishlist()
-    }
-    
-    setShowMergePrompt(false)
-    resetForm()
-    onClose()
-    onSuccess?.()
-    
-    toast({
-      title: merge ? "Data merged!" : "Welcome!",
-      description: merge 
-        ? "Your cart and wishlist have been preserved."
-        : "You're now logged in.",
-    })
-  }
-
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setError(null)
@@ -144,46 +111,8 @@ const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   const handleModalClose = () => {
     if (!isLoading) {
       resetForm()
-      setShowMergePrompt(false)
       onClose()
     }
-  }
-
-  if (showMergePrompt) {
-    return (
-      <Dialog open={isOpen} onOpenChange={handleModalClose}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
-              <span>Merge your data?</span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-4">
-                You have items in your cart and wishlist. Would you like to keep them?
-              </p>
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="text-xs text-blue-700">
-                  {cartItems.length > 0 && `${cartItems.length} item${cartItems.length > 1 ? 's' : ''} in cart`}
-                  {cartItems.length > 0 && wishlistItems.length > 0 && ' • '}
-                  {wishlistItems.length > 0 && `${wishlistItems.length} item${wishlistItems.length > 1 ? 's' : ''} in wishlist`}
-                </p>
-              </div>
-            </div>
-            <div className="flex space-x-3">
-              <Button onClick={() => handleMergeData(true)} className="flex-1 bg-green-600 hover:bg-green-700">
-                Keep my items
-              </Button>
-              <Button variant="outline" onClick={() => handleMergeData(false)} className="flex-1">
-                Start fresh
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    )
   }
 
   return (

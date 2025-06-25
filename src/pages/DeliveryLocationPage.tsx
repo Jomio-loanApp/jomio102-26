@@ -21,7 +21,6 @@ const DeliveryLocationPage = () => {
   const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Check location permissions on mount
   useEffect(() => {
     if ('geolocation' in navigator) {
       navigator.permissions.query({ name: 'geolocation' }).then((result) => {
@@ -67,10 +66,6 @@ const DeliveryLocationPage = () => {
         maximumAge: 300000,
       }
     );
-  };
-
-  const handleEnableLocation = () => {
-    handleGetCurrentLocation();
   };
 
   const handleConfirm = async () => {
@@ -140,10 +135,10 @@ const DeliveryLocationPage = () => {
     <div className="h-screen bg-gray-50 flex flex-col">
       <Header showSearch={false} />
       
-      {/* Main Container: Fixed height, non-scrolling */}
+      {/* Fixed height, non-scrolling layout */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
-        {/* Top Controls Section: Fixed at top */}
+        {/* Top Controls Section */}
         <div className="flex-shrink-0 bg-white border-b p-4 space-y-4">
           <div className="max-w-2xl mx-auto">
             <h1 className="text-xl font-bold text-center mb-3">Set Delivery Location</h1>
@@ -157,7 +152,7 @@ const DeliveryLocationPage = () => {
                     <p className="text-sm text-orange-800">Device location not enabled</p>
                   </div>
                   <Button
-                    onClick={handleEnableLocation}
+                    onClick={handleGetCurrentLocation}
                     size="sm"
                     variant="outline"
                     className="border-orange-300 text-orange-700"
@@ -192,7 +187,7 @@ const DeliveryLocationPage = () => {
           </div>
         </div>
 
-        {/* Map Section: Takes remaining space */}
+        {/* Map Section */}
         <div className="flex-1 relative">
           <GoogleMapSelector
             onLocationSelected={(lat, lng, address) => setSelected({ lat, lng, address })}
@@ -214,10 +209,10 @@ const DeliveryLocationPage = () => {
           )}
         </div>
 
-        {/* Bottom Controls Section: Fixed at bottom */}
+        {/* Bottom Controls Section */}
         <div className="flex-shrink-0 bg-white border-t p-4">
           <div className="max-w-2xl mx-auto space-y-4">
-            {/* Address Nickname Input (for authenticated users) */}
+            {/* Address Nickname Input */}
             {showNicknameField && (
               <div>
                 <label htmlFor="address-nickname" className="block text-sm font-medium text-gray-700 mb-2">

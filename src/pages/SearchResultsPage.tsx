@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { useAppStore } from '@/stores/appStore'
 import Header from '@/components/Header'
 import ProductCard from '@/components/ProductCard'
 import DynamicContentSection from '@/components/DynamicContentSection'
@@ -18,7 +17,7 @@ interface Product {
   price_string: string
   numeric_price: number
   unit_type: string
-  image_url: string | null  // Make required to match ProductQuickView interface
+  image_url: string | null
   category_id?: string
   is_active: boolean
   availability_status: string
@@ -29,26 +28,20 @@ const SearchResultsPage = () => {
   const searchTerm = searchParams.get('q') || ''
   
   const [displayItems, setDisplayItems] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  
-  const { isSupabaseReady, isRecoveringSession } = useAppStore()
 
   useEffect(() => {
-    // DO NOT FETCH if Supabase is not ready or if there's no search term
-    if (!isSupabaseReady || !searchTerm || isRecoveringSession) {
-      if (!searchTerm) {
-        setIsLoading(false)
-        setDisplayItems([])
-      }
+    if (!searchTerm) {
+      setDisplayItems([])
+      setIsLoading(false)
       return
     }
     
     fetchSearchResults()
-  }, [searchTerm, isSupabaseReady, isRecoveringSession])
+  }, [searchTerm])
 
-  // COMPLETE REBUILD: Search Results with Parallel Fetching and Data Merging
   const fetchSearchResults = async () => {
     try {
       setIsLoading(true)
@@ -56,12 +49,12 @@ const SearchResultsPage = () => {
       
       console.log('Fetching search results for:', searchTerm)
       
-      // PARALLEL FETCHES using Promise.all for better performance
+      // Parallel fetches for better performance
       const [productResponse, dynamicContentResponse] = await Promise.all([
-        // Fetch 1: Product search results using RPC function
+        // Fetch product search results
         supabase.rpc('search_products', { search_term: searchTerm }),
         
-        // Fetch 2: Interspersed dynamic content for search results
+        // Fetch interspersed dynamic content
         supabase
           .from('home_content_sections')
           .select(`
@@ -81,7 +74,7 @@ const SearchResultsPage = () => {
         throw new Error(`Product search failed: ${productResponse.error.message}`)
       }
 
-      // Handle dynamic content response (warn but don't fail if this errors)
+      // Handle dynamic content response (warn but don't fail)
       if (dynamicContentResponse.error) {
         console.warn('Failed to fetch dynamic content:', dynamicContentResponse.error)
       }
@@ -94,17 +87,16 @@ const SearchResultsPage = () => {
         dynamicContent: dynamicContent.length 
       })
       
-      // MERGE LOGIC: Insert dynamic content blocks at intervals
+      // Merge logic: Insert dynamic content blocks at intervals
       let combinedList = [...products]
       
       // Insert dynamic blocks into the product list at intervals
       dynamicContent.forEach((block, index) => {
         const insertAt = ((index + 1) * 6) + index // Insert after every 6 products
         if (insertAt < combinedList.length) {
-          combinedList.splice(insertAt, 0, { type: 'dynamic_section', data: block })
+          combinedList.splice(insertAt, 0, { type: 'DYNAMIC_SECTION', data: block })
         } else {
-          // If there are not enough products, append to the end
-          combinedList.push({ type: 'dynamic_section', data: block })
+          combinedList.push({ type: 'DYNAMIC_SECTION', data: block })
         }
       })
       
@@ -130,7 +122,7 @@ const SearchResultsPage = () => {
   }
 
   const renderSearchResults = () => {
-    if (isLoading || isRecoveringSession) {
+    if (isLoading) {
       return (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
           {[...Array(12)].map((_, index) => (
@@ -182,10 +174,9 @@ const SearchResultsPage = () => {
 
     return (
       <div className="space-y-6">
-        {/* RENDER COMBINED RESULTS with proper type checking */}
         {displayItems.map((item, index) => {
           // Check if this is a content section or a product
-          if (item.type === 'dynamic_section') {
+          if (item.type === 'DYNAMIC_SECTION') {
             return (
               <DynamicContentSection
                 key={`content-${item.data.id}-${index}`}
@@ -196,7 +187,7 @@ const SearchResultsPage = () => {
           }
           
           // Regular product - render in a grid container if it's the first in a group
-          const isFirstInGroup = index === 0 || displayItems[index - 1]?.type === 'dynamic_section'
+          const isFirstInGroup = index === 0 || displayItems[index - 1]?.type === 'DYNAMIC_SECTION'
           
           if (isFirstInGroup) {
             // Find all consecutive products starting from this index
@@ -214,7 +205,7 @@ const SearchResultsPage = () => {
                     key={`product-${product.product_id}-${index + prodIndex}`}
                     product={{
                       ...product,
-                      id: product.product_id // Add id for compatibility with ProductCard
+                      id: product.product_id
                     }}
                     onQuickView={handleQuickView}
                   />
@@ -223,7 +214,6 @@ const SearchResultsPage = () => {
             )
           }
           
-          // Skip individual products that are part of a group
           return null
         })}
       </div>
@@ -234,14 +224,13 @@ const SearchResultsPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Header showSearch={true} />
       
-      {/* FIXED: Reduced horizontal padding to match tighter layout */}
       <div className="max-w-7xl mx-auto px-2 py-6 pb-20 md:pb-6">
         {searchTerm && (
           <div className="mb-6">
             <h1 className="text-xl font-semibold text-gray-900">
               Search results for "{searchTerm}"
             </h1>
-            {!isLoading && !isRecoveringSession && displayItems.length > 0 && (
+            {!isLoading && displayItems.length > 0 && (
               <p className="text-sm text-gray-600 mt-1">
                 Found {displayItems.filter(item => !item.type).length} products
               </p>

@@ -45,17 +45,12 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [setHeaderSticky, setShowHeaderText])
 
-  // Manual search trigger - only on Enter or button click
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     const trimmed = localQuery.trim()
     if (trimmed.length >= 2) {
       navigate(`/search?q=${encodeURIComponent(trimmed)}`)
     }
-  }
-
-  const handleSearchButtonClick = () => {
-    handleSearch()
   }
 
   const clearSearch = () => {
@@ -88,8 +83,13 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
       `}
       style={!isHeaderSticky ? getHeaderStyle() : {}}
     >
-      {/* Desktop-constrained content */}
-      <div className={`${isHeaderSticky ? 'w-full max-w-screen-xl mx-auto' : ''} px-4 py-4`}>
+      {/* Glassy overlay for background images */}
+      {!isHeaderSticky && headerBackground?.background_image_url && (
+        <div className="absolute inset-0 bg-black bg-opacity-30 z-10"></div>
+      )}
+
+      {/* Header content with proper z-index */}
+      <div className={`${isHeaderSticky ? 'w-full max-w-screen-xl mx-auto' : ''} px-4 py-4 relative z-20`}>
         {/* Store Title - Hide when scrolled */}
         {showHeaderText && !isHeaderSticky && (
           <div className="text-center mb-4">
@@ -136,7 +136,7 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
                   <Button
                     type="button"
                     size="sm"
-                    onClick={handleSearchButtonClick}
+                    onClick={handleSearch}
                     className="p-1 h-7 w-7 bg-green-600 hover:bg-green-700 text-white rounded-full"
                   >
                     <Search className="w-4 h-4" />

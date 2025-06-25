@@ -27,7 +27,7 @@ const loadGoogleMaps = (callback: () => void) => {
   (window as any).initMapCallback = callback;
   const script = document.createElement("script");
   script.id = scriptId;
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=initMapCallback`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=initMapCallback&loading=async`;
   script.async = true;
   script.defer = true;
   document.body.appendChild(script);
@@ -51,61 +51,74 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
     loadGoogleMaps(() => {
       if (!mapRef.current) return;
 
-      // Initialize map with single-finger pan enabled
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        center: { lat: initialLat, lng: initialLng },
-        zoom: 16,
-        disableDefaultUI: true,
-        zoomControl: true,
-        gestureHandling: 'greedy', // Enable single-finger pan
-        clickableIcons: false,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-      });
-
-      // Set up search autocomplete if search input exists
-      if (searchInputRef.current) {
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(
-          searchInputRef.current,
-          {
-            fields: ['geometry', 'formatted_address', 'name'],
-          }
-        );
-
-        autocompleteRef.current.addListener("place_changed", () => {
-          const place = autocompleteRef.current.getPlace();
-          if (place.geometry && place.geometry.location) {
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            mapInstanceRef.current.setCenter({ lat, lng });
-            mapInstanceRef.current.setZoom(16);
-            handlePositionChange(lat, lng);
-          }
+      try {
+        // Initialize map with single-finger pan enabled
+        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+          center: { lat: initialLat, lng: initialLng },
+          zoom: 16,
+          disableDefaultUI: true,
+          zoomControl: true,
+          gestureHandling: 'greedy', // Enable single-finger pan
+          clickableIcons: false,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
         });
+
+        // Set up search autocomplete if search input exists
+        if (searchInputRef.current) {
+          autocompleteRef.current = new window.google.maps.places.Autocomplete(
+            searchInputRef.current,
+            {
+              fields: ['geometry', 'formatted_address', 'name'],
+            }
+          );
+
+          autocompleteRef.current.addListener("place_changed", () => {
+            const place = autocompleteRef.current.getPlace();
+            if (place.geometry && place.geometry.location) {
+              const lat = place.geometry.location.lat();
+              const lng = place.geometry.location.lng();
+              mapInstanceRef.current.setCenter({ lat, lng });
+              mapInstanceRef.current.setZoom(16);
+              handlePositionChange(lat, lng);
+            }
+          });
+        }
+
+        let debounceTimeout: NodeJS.Timeout;
+
+        // Use map idle event for "fixed pin" interaction
+        mapInstanceRef.current.addListener("idle", () => {
+          clearTimeout(debounceTimeout);
+          debounceTimeout = setTimeout(() => {
+            const center = mapInstanceRef.current.getCenter();
+            if (center) {
+              const lat = center.lat();
+              const lng = center.lng();
+              handlePositionChange(lat, lng);
+            }
+          }, 300);
+        });
+
+        // Initial address lookup
+        handlePositionChange(initialLat, initialLng);
+        setIsReady(true);
+      } catch (error) {
+        console.error('Error initializing Google Maps:', error);
+        setIsReady(false);
       }
-
-      let debounceTimeout: NodeJS.Timeout;
-
-      // Use map idle event for "fixed pin" interaction
-      mapInstanceRef.current.addListener("idle", () => {
-        clearTimeout(debounceTimeout);
-        debounceTimeout = setTimeout(() => {
-          const center = mapInstanceRef.current.getCenter();
-          if (center) {
-            const lat = center.lat();
-            const lng = center.lng();
-            handlePositionChange(lat, lng);
-          }
-        }, 300);
-      });
-
-      // Initial address lookup
-      handlePositionChange(initialLat, initialLng);
-      setIsReady(true);
     });
 
     return () => {
+      // Clean up map instance
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current = null;
+        } catch (error) {
+          console.error('Error cleaning up map:', error);
+        }
+      }
       setIsReady(false);
     };
   }, []);

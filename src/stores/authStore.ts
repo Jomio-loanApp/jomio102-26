@@ -23,7 +23,6 @@ interface AuthState {
   signUp: (email: string, password: string, fullName: string, phoneNumber: string) => Promise<void>
   signOut: () => Promise<void>
   updateProfile: (profileData: { full_name: string; phone_number: string }) => Promise<void>
-  checkSessionOnFocus: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
 
@@ -57,9 +56,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (event === 'SIGNED_IN' && session?.user) {
           set({ user: session.user })
           await get().refreshProfile()
-          
-          // FIXED: Silent cart preservation - no popup, no disruption
-          console.log('User signed in - guest cart automatically preserved in local storage')
+          console.log('User signed in - guest cart automatically preserved')
           
         } else if (event === 'SIGNED_OUT') {
           set({ user: null, profile: null })
@@ -88,8 +85,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().refreshProfile()
       
       console.log('User signed in successfully:', data.user?.id)
-      // FIXED: Guest cart is automatically preserved in localStorage via Zustand persistence
-      // No popup, no data loss, seamless transition
     } catch (error) {
       console.error('Error signing in:', error)
       throw error
@@ -132,8 +127,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       
       console.log('User signed up successfully:', data.user?.id)
-      // FIXED: Guest cart is automatically preserved in localStorage via Zustand persistence
-      // No popup, no data loss, seamless transition
     } catch (error) {
       console.error('Error signing up:', error)
       throw error
@@ -166,21 +159,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: null, profile: null })
     } catch (error) {
       console.error('Error signing out:', error)
-    }
-  },
-
-  checkSessionOnFocus: async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (session?.user) {
-        set({ user: session.user })
-        await get().refreshProfile()
-      } else {
-        set({ user: null, profile: null })
-      }
-    } catch (error) {
-      console.error('Error checking session on focus:', error)
     }
   },
 

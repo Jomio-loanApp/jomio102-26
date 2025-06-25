@@ -42,11 +42,6 @@ const HomePage = () => {
     fetchHomeContentSections()
   }, [fetchHeaderBackground, fetchBannerStrips, fetchHomeContentSections])
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
-    // TODO: Implement search results with interspersed content
-  }
-
   const handleQuickView = (product: Product) => {
     setSelectedProduct(product)
   }
@@ -55,10 +50,8 @@ const HomePage = () => {
     setSelectedProduct(null)
   }
 
-  // For login modal from profile button
   const handleProfileClick = () => {
     if (!user) setShowLoginModal(true)
-    // else: user is authenticated; let DynamicHeader's /profile link handle
   }
 
   const transformProductForQuickView = (product: Product) => {
@@ -95,16 +88,14 @@ const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Full-width header background */}
+      {/* Single parent container for header background */}
       <div 
         className="relative w-full"
         style={getHeaderStyle()}
       >
         {/* Desktop-constrained header content */}
         <div className="w-full max-w-screen-xl mx-auto">
-          <DynamicHeader
-            onProfileClick={handleProfileClick}
-          />
+          <DynamicHeader onProfileClick={handleProfileClick} />
 
           {/* Category Scroller - Inside the background area but constrained */}
           <div className={isHeaderSticky ? 'mb-32' : ''}>
@@ -138,7 +129,6 @@ const HomePage = () => {
         />
       )}
 
-      {/* LoginModal for profile button */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}

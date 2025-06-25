@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { useHomeStore } from '@/stores/homeStore'
 import DynamicHeader from '@/components/DynamicHeader'
-import CategoryScroller from '@/components/CategoryScroller'
 import BannerStrip from '@/components/BannerStrip'
 import ContentSectionRenderer from '@/components/ContentSectionRenderer'
 import ProductQuickView from '@/components/ProductQuickView'
@@ -32,15 +31,15 @@ const HomePage = () => {
     fetchHeaderBackground,
     fetchBannerStrips,
     fetchHomeContentSections,
-    isHeaderSticky,
-    headerBackground
+    fetchCategories
   } = useHomeStore()
 
   useEffect(() => {
     fetchHeaderBackground()
     fetchBannerStrips()
     fetchHomeContentSections()
-  }, [fetchHeaderBackground, fetchBannerStrips, fetchHomeContentSections])
+    fetchCategories()
+  }, [fetchHeaderBackground, fetchBannerStrips, fetchHomeContentSections, fetchCategories])
 
   const handleQuickView = (product: Product) => {
     setSelectedProduct(product)
@@ -67,18 +66,8 @@ const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Single parent container for header background */}
-      <div className="relative w-full">
-        {/* Desktop-constrained header content */}
-        <div className="w-full max-w-screen-xl mx-auto">
-          <DynamicHeader onProfileClick={handleProfileClick} />
-
-          {/* Category Scroller - Inside the background area but constrained */}
-          <div className={isHeaderSticky ? 'mb-32' : ''}>
-            <CategoryScroller />
-          </div>
-        </div>
-      </div>
+      {/* Header with integrated background and category scroller */}
+      <DynamicHeader onProfileClick={handleProfileClick} />
 
       {/* Full-width banner strip */}
       <BannerStrip />

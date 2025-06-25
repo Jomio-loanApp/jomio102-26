@@ -1,18 +1,18 @@
 
 import React, { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Loader2, MapPin, Navigation } from "lucide-react";
+import { MapPin, Loader2 } from "lucide-react";
 
 interface GoogleMapSelectorProps {
   onLocationSelected: (lat: number, lng: number, address: string) => void;
   initialLat?: number;
   initialLng?: number;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q";
 
 const loadGoogleMaps = (callback: () => void) => {
-  // Do not load the script twice
   if (window.google && window.google.maps) {
     callback();
     return;
@@ -36,60 +36,68 @@ const loadGoogleMaps = (callback: () => void) => {
 const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
   onLocationSelected,
   initialLat = 25.9716,
-  initialLng = 85.5946
+  initialLng = 85.5946,
+  searchQuery = "",
+  onSearchQueryChange
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
   const [address, setAddress] = useState("");
-  const [isLocating, setIsLocating] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const autocompleteRef = useRef<HTMLInputElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const autocompleteRef = useRef<any>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadGoogleMaps(() => {
       if (!mapRef.current) return;
 
-      // @ts-ignore
+      // Initialize map with single-finger pan enabled
       mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: initialLat, lng: initialLng },
         zoom: 16,
         disableDefaultUI: true,
         zoomControl: true,
-        // FIXED: Enable single-finger pan on mobile
-        gestureHandling: 'greedy', // This allows single-finger pan
+        gestureHandling: 'greedy', // Enable single-finger pan
         clickableIcons: false,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
       });
 
-      // Add search box
-      if (autocompleteRef.current) {
-        // @ts-ignore
-        const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current);
-        autocomplete.addListener("place_changed", () => {
-          const place = autocomplete.getPlace();
+      // Set up search autocomplete if search input exists
+      if (searchInputRef.current) {
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(
+          searchInputRef.current,
+          {
+            fields: ['geometry', 'formatted_address', 'name'],
+          }
+        );
+
+        autocompleteRef.current.addListener("place_changed", () => {
+          const place = autocompleteRef.current.getPlace();
           if (place.geometry && place.geometry.location) {
             const lat = place.geometry.location.lat();
             const lng = place.geometry.location.lng();
             mapInstanceRef.current.setCenter({ lat, lng });
+            mapInstanceRef.current.setZoom(16);
             handlePositionChange(lat, lng);
           }
         });
       }
 
-      let timeout: NodeJS.Timeout;
+      let debounceTimeout: NodeJS.Timeout;
 
-      // FIXED: Use center of map for "fixed pin" interaction
+      // Use map idle event for "fixed pin" interaction
       mapInstanceRef.current.addListener("idle", () => {
-        clearTimeout(timeout);
-        // Debounce to avoid too-rapid API calls
-        timeout = setTimeout(() => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(() => {
           const center = mapInstanceRef.current.getCenter();
           if (center) {
             const lat = center.lat();
             const lng = center.lng();
             handlePositionChange(lat, lng);
           }
-        }, 250);
+        }, 300);
       });
 
       // Initial address lookup
@@ -97,97 +105,67 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
       setIsReady(true);
     });
 
-    // Cleanup on unmount
     return () => {
       setIsReady(false);
     };
-    // eslint-disable-next-line
   }, []);
 
+  // Handle external search query changes
+  useEffect(() => {
+    if (searchInputRef.current && searchQuery !== searchInputRef.current.value) {
+      searchInputRef.current.value = searchQuery;
+    }
+  }, [searchQuery]);
+
   const handlePositionChange = async (lat: number, lng: number) => {
-    // Reverse geocode
     if (window.google && window.google.maps) {
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
         if (status === "OK" && results && results[0]) {
-          setAddress(results[0].formatted_address);
-          onLocationSelected(lat, lng, results[0].formatted_address);
+          const formattedAddress = results[0].formatted_address;
+          setAddress(formattedAddress);
+          onLocationSelected(lat, lng, formattedAddress);
         } else {
-          setAddress(`Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`);
-          onLocationSelected(lat, lng, `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`);
+          const fallbackAddress = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
+          setAddress(fallbackAddress);
+          onLocationSelected(lat, lng, fallbackAddress);
         }
       });
     }
   };
 
-  const handleUseCurrentLocation = () => {
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (res) => {
-        const lat = res.coords.latitude;
-        const lng = res.coords.longitude;
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.setCenter({ lat, lng });
-        }
-        handlePositionChange(lat, lng);
-        setIsLocating(false);
-      },
-      () => {
-        setIsLocating(false);
-        alert("Could not access your location.");
-      }
-    );
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (onSearchQueryChange) {
+      onSearchQueryChange(value);
+    }
   };
 
   return (
-    <div className="h-full w-full flex flex-col">
-      {/* Search and Controls - positioned at top */}
-      <div className="absolute top-4 left-4 right-4 z-20 bg-white rounded-lg shadow-lg p-3 space-y-3">
-        <div className="flex flex-col space-y-2">
-          <input
-            ref={autocompleteRef}
-            placeholder="Search for a place…"
-            className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600 text-base"
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-          />
-          <Button
-            onClick={handleUseCurrentLocation}
-            disabled={isLocating}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full"
-          >
-            {isLocating ? (
-              <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-            ) : (
-              <Navigation className="mr-2 w-4 h-4" />
-            )}
-            Use Current Location
-          </Button>
-        </div>
-        
-        {address && (
-          <div className="bg-green-50 px-3 py-2 rounded text-green-900 text-sm border border-green-200">
-            <b>Selected:</b> {address}
-          </div>
-        )}
-      </div>
+    <div className="relative h-full w-full">
+      {/* Hidden search input for autocomplete */}
+      <input
+        ref={searchInputRef}
+        type="text"
+        onChange={handleSearchInputChange}
+        className="absolute -top-10 left-0 opacity-0 pointer-events-none"
+        tabIndex={-1}
+      />
 
-      {/* FIXED: Map container with relative positioning for fixed pin */}
-      <div className="relative h-full w-full">
-        {/* Actual map */}
-        <div ref={mapRef} className="h-full w-full" />
-        
-        {/* FIXED: Static centered pin that doesn't move */}
+      {/* Map Container */}
+      <div ref={mapRef} className="h-full w-full relative">
+        {/* Fixed Pin in Center */}
         {isReady && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-full z-10 pointer-events-none">
-            <MapPin className="text-red-600 w-8 h-8 drop-shadow-lg" fill="currentColor" />
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-full z-20 pointer-events-none">
+            <div className="relative">
+              <MapPin className="text-red-600 w-8 h-8 drop-shadow-lg" fill="currentColor" />
+              {/* Pulsing dot at pin base */}
+              <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
+            </div>
           </div>
         )}
-        
-        {/* Loading overlay */}
+
+        {/* Loading Overlay */}
         {!isReady && (
           <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-30">
             <div className="text-center">

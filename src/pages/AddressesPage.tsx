@@ -4,14 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { ArrowLeft, MapPin, Plus, Edit, Trash2, Loader2, Home } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { ArrowLeft, MapPin, Trash2, Loader2, Home } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
-import LocationSelector from '@/components/LocationSelector'
 
 interface Address {
   id: string
@@ -30,18 +25,7 @@ const AddressesPage = () => {
   const { user } = useAuthStore()
   const [addresses, setAddresses] = useState<Address[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editingAddress, setEditingAddress] = useState<Address | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null)
-
-  const [formData, setFormData] = useState({
-    nickname: '',
-    latitude: 0,
-    longitude: 0,
-    locationName: '',
-    isDefault: false
-  })
 
   useEffect(() => {
     if (!user) {
@@ -81,130 +65,6 @@ const AddressesPage = () => {
       })
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const resetForm = () => {
-    setFormData({
-      nickname: '',
-      latitude: 0,
-      longitude: 0,
-      locationName: '',
-      isDefault: false
-    })
-    setEditingAddress(null)
-  }
-
-  const handleAddAddress = () => {
-    resetForm()
-    setShowAddModal(true)
-  }
-
-  const handleEditAddress = (address: Address) => {
-    setFormData({
-      nickname: address.address_nickname,
-      latitude: address.latitude,
-      longitude: address.longitude,
-      locationName: address.location_name,
-      isDefault: address.is_default
-    })
-    setEditingAddress(address)
-    setShowAddModal(true)
-  }
-
-  const handleLocationSelect = (lat: number, lng: number, locationName: string) => {
-    setFormData(prev => ({
-      ...prev,
-      latitude: lat,
-      longitude: lng,
-      locationName
-    }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user || !formData.locationName || !formData.nickname) {
-      toast({
-        title: "Error",
-        description: "Please fill in all required fields and select a location.",
-        variant: "destructive"
-      })
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      if (editingAddress) {
-        // Update existing address
-        const { error } = await supabase
-          .from('addresses')
-          .update({
-            address_nickname: formData.nickname,
-            latitude: formData.latitude,
-            longitude: formData.longitude,
-            location_name: formData.locationName,
-            is_default: formData.isDefault,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingAddress.id)
-
-        if (error) throw error
-
-        toast({
-          title: "Success",
-          description: "Address updated successfully.",
-        })
-      } else {
-        // Add new address
-        const { error } = await supabase
-          .from('addresses')
-          .insert({
-            profile_id: user.id,
-            address_nickname: formData.nickname,
-            latitude: formData.latitude,
-            longitude: formData.longitude,
-            location_name: formData.locationName,
-            is_default: formData.isDefault
-          })
-
-        if (error) throw error
-
-        toast({
-          title: "Success",
-          description: "Address added successfully.",
-        })
-      }
-
-      // If this address is set as default, unset other default addresses
-      if (formData.isDefault) {
-        await supabase
-          .from('addresses')
-          .update({ is_default: false })
-          .eq('profile_id', user.id)
-          .neq('id', editingAddress?.id || '')
-
-        if (editingAddress) {
-          await supabase
-            .from('addresses')
-            .update({ is_default: true })
-            .eq('id', editingAddress.id)
-        }
-      }
-
-      setShowAddModal(false)
-      resetForm()
-      await fetchAddresses()
-
-    } catch (error) {
-      console.error('Error saving address:', error)
-      toast({
-        title: "Error",
-        description: "Failed to save address. Please try again.",
-        variant: "destructive"
-      })
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -315,15 +175,11 @@ const AddressesPage = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Add Address Button */}
-            <Button
-              onClick={handleAddAddress}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
-              size="lg"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Add New Address
-            </Button>
+            <div className="text-center py-4">
+              <p className="text-gray-600">
+                Manage your saved delivery addresses. Add new addresses during checkout.
+              </p>
+            </div>
 
             {/* Addresses List */}
             {addresses.length === 0 ? (
@@ -331,10 +187,9 @@ const AddressesPage = () => {
                 <CardContent>
                   <Home className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">No addresses saved</h3>
-                  <p className="text-gray-600 mb-4">Add your first delivery address to get started.</p>
-                  <Button onClick={handleAddAddress} variant="outline">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Address
+                  <p className="text-gray-600 mb-4">You can add addresses during checkout.</p>
+                  <Button onClick={() => navigate('/')} variant="outline">
+                    Start Shopping
                   </Button>
                 </CardContent>
               </Card>
@@ -371,16 +226,9 @@ const AddressesPage = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleEditAddress(address)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
                             onClick={() => handleDeleteAddress(address.id)}
                             disabled={isDeletingId === address.id}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             {isDeletingId === address.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -398,90 +246,6 @@ const AddressesPage = () => {
           </div>
         )}
       </div>
-
-      {/* Add/Edit Address Modal */}
-      <Dialog open={showAddModal} onOpenChange={(open) => {
-        if (!open && !isSubmitting) {
-          setShowAddModal(false)
-          resetForm()
-        }
-      }}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingAddress ? 'Edit Address' : 'Add New Address'}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="nickname">Address Name *</Label>
-              <Input
-                id="nickname"
-                placeholder="e.g., Home, Work, etc."
-                value={formData.nickname}
-                onChange={(e) => setFormData(prev => ({ ...prev, nickname: e.target.value }))}
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Location *</Label>
-              <LocationSelector
-                onLocationSelect={handleLocationSelect}
-                selectedPosition={formData.latitude && formData.longitude ? [formData.latitude, formData.longitude] : undefined}
-              />
-              {formData.locationName && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm text-green-800">
-                    <strong>Selected:</strong> {formData.locationName}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="default"
-                checked={formData.isDefault}
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isDefault: checked }))}
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="default">Set as default address</Label>
-            </div>
-
-            <div className="flex space-x-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowAddModal(false)
-                  resetForm()
-                }}
-                disabled={isSubmitting}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting || !formData.locationName || !formData.nickname}
-                className="flex-1 bg-green-600 hover:bg-green-700"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {editingAddress ? 'Updating...' : 'Adding...'}
-                  </>
-                ) : (
-                  editingAddress ? 'Update Address' : 'Add Address'
-                )}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import GoogleMapSelector from "@/components/GoogleMapSelector";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import { useLocationStore } from "@/stores/locationStore";
 import { useAuthStore } from "@/stores/authStore";
 import { supabase } from "@/lib/supabase";
+import { Navigation, MapPin, AlertCircle } from "lucide-react";
 
 const DeliveryLocationPage = () => {
   const navigate = useNavigate();
@@ -17,9 +18,60 @@ const DeliveryLocationPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [addressNickname, setAddressNickname] = useState("");
   const [nicknameError, setNicknameError] = useState<string | null>(null);
+  const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Authenticated user must provide nickname; guests do not see field
+  // Check location permissions on mount
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        setHasLocationPermission(result.state === 'granted');
+      }).catch(() => {
+        setHasLocationPermission(false);
+      });
+    } else {
+      setHasLocationPermission(false);
+    }
+  }, []);
+
   const showNicknameField = !!user;
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Geolocation not supported",
+        description: "Your browser doesn't support location services.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setSelected({ lat: latitude, lng: longitude, address: `Location at ${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
+        setHasLocationPermission(true);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        setHasLocationPermission(false);
+        toast({
+          title: "Location access denied",
+          description: "Please enable location access or select a location on the map.",
+          variant: "destructive",
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000,
+      }
+    );
+  };
+
+  const handleEnableLocation = () => {
+    handleGetCurrentLocation();
+  };
 
   const handleConfirm = async () => {
     setNicknameError(null);
@@ -32,20 +84,16 @@ const DeliveryLocationPage = () => {
       return;
     }
 
-    // If user is authenticated, make sure nickname is provided
     if (showNicknameField && !addressNickname.trim()) {
       setNicknameError("Please provide a nickname for this address (e.g. Home, Work).");
       return;
     }
 
-    // Save location to global store for downstream flow
     setDeliveryLocation(selected.lat, selected.lng, selected.address);
 
-    // Authenticated user: Save new address
     if (user && selected) {
       setIsSaving(true);
       try {
-        // Save new address to user's saved addresses table
         const { error } = await supabase.from("addresses").insert([
           {
             profile_id: user.id,
@@ -57,7 +105,6 @@ const DeliveryLocationPage = () => {
           },
         ]);
         if (error) {
-          // Allow flow to continue, but toast for user
           toast({
             title: "Could not save address",
             description: "We'll still use this location for your order.",
@@ -80,7 +127,6 @@ const DeliveryLocationPage = () => {
         setIsSaving(false);
       }
     } else {
-      // Guest mode: no address table
       toast({
         title: "Location Confirmed!",
         description: selected.address,
@@ -94,42 +140,107 @@ const DeliveryLocationPage = () => {
     <div className="h-screen bg-gray-50 flex flex-col">
       <Header showSearch={false} />
       
-      {/* FIXED: Non-scrolling layout with flex-direction: column */}
+      {/* Main Container: Fixed height, non-scrolling */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Section: Static controls that don't scroll */}
-        <div className="flex-shrink-0 p-4 bg-white border-b">
+        
+        {/* Top Controls Section: Fixed at top */}
+        <div className="flex-shrink-0 bg-white border-b p-4 space-y-4">
           <div className="max-w-2xl mx-auto">
-            <h1 className="text-2xl font-bold mb-1 text-center">Set Delivery Location</h1>
-            <p className="text-center mb-4 text-gray-600">
-              Search for your address, use your current location, or move the map pin.
-            </p>
+            <h1 className="text-xl font-bold text-center mb-3">Set Delivery Location</h1>
             
-            {/* Authenticated user input: Save address as */}
+            {/* Location Permission Banner */}
+            {hasLocationPermission === false && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                  <div className="flex-1">
+                    <p className="text-sm text-orange-800">Device location not enabled</p>
+                  </div>
+                  <Button
+                    onClick={handleEnableLocation}
+                    size="sm"
+                    variant="outline"
+                    className="border-orange-300 text-orange-700"
+                  >
+                    Enable
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Search Input */}
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Search for a place..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+              />
+              
+              {/* Use Current Location Button */}
+              <Button
+                onClick={handleGetCurrentLocation}
+                variant="outline"
+                className="w-full"
+                size="lg"
+              >
+                <Navigation className="mr-2 w-5 h-5" />
+                Use Current Location
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Map Section: Takes remaining space */}
+        <div className="flex-1 relative">
+          <GoogleMapSelector
+            onLocationSelected={(lat, lng, address) => setSelected({ lat, lng, address })}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+          />
+          
+          {/* Selected Location Display */}
+          {selected && (
+            <div className="absolute top-4 left-4 right-4 z-30 bg-white rounded-lg shadow-lg p-3 border border-green-200">
+              <div className="flex items-start space-x-2">
+                <MapPin className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-green-800">Selected Location</p>
+                  <p className="text-xs text-green-700 break-words">{selected.address}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Controls Section: Fixed at bottom */}
+        <div className="flex-shrink-0 bg-white border-t p-4">
+          <div className="max-w-2xl mx-auto space-y-4">
+            {/* Address Nickname Input (for authenticated users) */}
             {showNicknameField && (
-              <div className="mb-4">
-                <label htmlFor="address-nickname" className="block text-sm font-medium text-gray-700">
+              <div>
+                <label htmlFor="address-nickname" className="block text-sm font-medium text-gray-700 mb-2">
                   Save address as <span className="text-red-600">*</span>
                 </label>
                 <input
                   id="address-nickname"
-                  required
                   type="text"
-                  minLength={2}
                   value={addressNickname}
                   onChange={(e) => setAddressNickname(e.target.value)}
                   placeholder="Home, Work, Mom's House"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
                   disabled={isSaving}
                 />
                 {nicknameError && (
-                  <div className="text-xs text-red-600 mt-1">{nicknameError}</div>
+                  <p className="text-xs text-red-600 mt-1">{nicknameError}</p>
                 )}
-                <div className="text-xs text-gray-500 mt-1">Help yourself remember: Give addresses a friendly label for future orders.</div>
               </div>
             )}
             
+            {/* Confirm Button */}
             <Button
-              className="w-full text-base"
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
               size="lg"
               onClick={handleConfirm}
               disabled={!selected || isSaving}
@@ -137,13 +248,6 @@ const DeliveryLocationPage = () => {
               {isSaving ? "Saving..." : "Confirm Location & Proceed"}
             </Button>
           </div>
-        </div>
-
-        {/* Bottom Section: Map that fills remaining space */}
-        <div className="flex-1 relative">
-          <GoogleMapSelector
-            onLocationSelected={(lat, lng, address) => setSelected({ lat, lng, address })}
-          />
         </div>
       </div>
     </div>

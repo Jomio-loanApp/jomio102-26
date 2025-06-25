@@ -20,6 +20,7 @@ const DeliveryLocationPage = () => {
   const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapInstance, setMapInstance] = useState<any>(null);
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -34,11 +35,14 @@ const DeliveryLocationPage = () => {
   }, []);
 
   useEffect(() => {
+    let scriptLoaded = false;
+    
     const initMap = () => {
       const mapElement = document.getElementById('delivery-map');
-      if (!mapElement || !window.google) return;
+      if (!mapElement || !window.google?.maps || scriptLoaded) return;
 
       try {
+        console.log('Initializing map...');
         const map = new window.google.maps.Map(mapElement, {
           center: { lat: 25.9716, lng: 85.5946 },
           zoom: 16,
@@ -50,7 +54,9 @@ const DeliveryLocationPage = () => {
           disableDefaultUI: true,
         });
 
-        let debounceTimeout;
+        setMapInstance(map);
+
+        let debounceTimeout: NodeJS.Timeout;
         map.addListener('idle', () => {
           clearTimeout(debounceTimeout);
           debounceTimeout = setTimeout(() => {
@@ -58,33 +64,54 @@ const DeliveryLocationPage = () => {
             if (center) {
               const lat = center.lat();
               const lng = center.lng();
-              setSelected({ 
-                lat, 
-                lng, 
-                address: `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}` 
+              console.log('Map center changed:', lat, lng);
+              
+              // Get address using geocoding
+              const geocoder = new window.google.maps.Geocoder();
+              geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
+                if (status === 'OK' && results && results[0]) {
+                  setSelected({ 
+                    lat, 
+                    lng, 
+                    address: results[0].formatted_address 
+                  });
+                } else {
+                  setSelected({ 
+                    lat, 
+                    lng, 
+                    address: `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}` 
+                  });
+                }
               });
             }
           }, 500);
         });
 
         setMapLoaded(true);
+        console.log('Map initialized successfully');
       } catch (error) {
         console.error('Map initialization error:', error);
         setMapLoaded(false);
       }
     };
 
-    if (window.google && window.google.maps) {
+    if (window.google?.maps) {
       initMap();
     } else {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q&libraries=places&loading=async`;
-      script.onload = initMap;
-      script.onerror = () => {
-        console.error('Failed to load Google Maps');
-        setMapLoaded(false);
-      };
-      document.head.appendChild(script);
+      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+      if (!existingScript) {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q&libraries=places&loading=async`;
+        script.onload = () => {
+          scriptLoaded = true;
+          initMap();
+        };
+        script.onerror = () => {
+          console.error('Failed to load Google Maps');
+          setMapLoaded(false);
+        };
+        document.head.appendChild(script);
+      }
     }
   }, []);
 
@@ -103,17 +130,14 @@ const DeliveryLocationPage = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setSelected({ 
-          lat: latitude, 
-          lng: longitude, 
-          address: `Current location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}` 
-        });
+        console.log('Got current location:', latitude, longitude);
+        
         setHasLocationPermission(true);
         
-        const mapElement = document.getElementById('delivery-map');
-        if (mapElement && window.google) {
-          const map = new window.google.maps.Map(mapElement);
-          map.setCenter({ lat: latitude, lng: longitude });
+        if (mapInstance) {
+          const newCenter = { lat: latitude, lng: longitude };
+          mapInstance.setCenter(newCenter);
+          mapInstance.setZoom(16);
         }
       },
       (error) => {
@@ -210,7 +234,7 @@ const DeliveryLocationPage = () => {
         {/* Top Controls - Overlaid on map */}
         <div className="absolute top-4 left-4 right-4 z-20 space-y-3">
           {/* Search Box */}
-          <div className="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
@@ -223,9 +247,20 @@ const DeliveryLocationPage = () => {
             </div>
           </div>
 
+          {/* Use Current Location Button */}
+          <Button
+            onClick={handleGetCurrentLocation}
+            variant="outline"
+            className="w-full bg-white/90 backdrop-blur-sm"
+            size="lg"
+          >
+            <Navigation className="mr-2 w-5 h-5" />
+            Use Current Location
+          </Button>
+
           {/* Location Permission Banner */}
           {hasLocationPermission === false && (
-            <div className="bg-orange-50 bg-opacity-95 backdrop-blur-sm border border-orange-200 rounded-lg p-3">
+            <div className="bg-orange-50/95 backdrop-blur-sm border border-orange-200 rounded-lg p-3">
               <div className="flex items-center space-x-2">
                 <AlertCircle className="w-5 h-5 text-orange-600" />
                 <div className="flex-1">
@@ -242,22 +277,11 @@ const DeliveryLocationPage = () => {
               </div>
             </div>
           )}
-
-          {/* Use Current Location Button */}
-          <Button
-            onClick={handleGetCurrentLocation}
-            variant="outline"
-            className="w-full bg-white bg-opacity-90 backdrop-blur-sm"
-            size="lg"
-          >
-            <Navigation className="mr-2 w-5 h-5" />
-            Use Current Location
-          </Button>
         </div>
 
         {/* Selected Location Display */}
         {selected && (
-          <div className="absolute top-32 left-4 right-4 z-20 bg-white bg-opacity-95 backdrop-blur-sm rounded-lg shadow-lg p-3 border border-green-200">
+          <div className="absolute top-32 left-4 right-4 z-20 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 border border-green-200">
             <div className="flex items-start space-x-2">
               <MapPin className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
@@ -268,10 +292,10 @@ const DeliveryLocationPage = () => {
           </div>
         )}
 
-        {/* Bottom Controls - Overlaid on map */}
-        <div className="absolute bottom-4 left-4 right-4 z-20 space-y-3">
+        {/* Bottom Controls - Fixed at bottom with proper spacing */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 p-4 space-y-3 bg-gradient-to-t from-black/20 to-transparent">
           {showNicknameField && (
-            <div className="bg-white bg-opacity-95 backdrop-blur-sm rounded-lg p-4 shadow-lg">
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg p-4 shadow-lg">
               <label htmlFor="address-nickname" className="block text-sm font-medium text-gray-700 mb-2">
                 Save address as <span className="text-red-600">*</span>
               </label>
@@ -291,13 +315,16 @@ const DeliveryLocationPage = () => {
           )}
           
           <Button
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold bg-opacity-95 backdrop-blur-sm"
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold bg-opacity-95 backdrop-blur-sm shadow-lg"
             size="lg"
             onClick={handleConfirm}
             disabled={!selected || isSaving}
           >
             {isSaving ? "Saving..." : "Confirm Location & Proceed"}
           </Button>
+          
+          {/* Extra spacing for mobile devices */}
+          <div className="h-4"></div>
         </div>
 
         {!mapLoaded && (

@@ -89,7 +89,7 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
           <div className="flex justify-between items-center">
             {/* Left Side - Store Name */}
             <h1
-              className="text-2xl sm:text-3xl font-bold cursor-pointer transition-opacity duration-300"
+              className="text-xl sm:text-2xl font-bold cursor-pointer transition-opacity duration-300"
               style={{
                 color: isHeaderSticky ? '#059669' : 'white',
                 textShadow: isHeaderSticky ? 'none' : '2px 2px 4px rgba(0,0,0,0.5)'
@@ -185,12 +185,14 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
                   <span className="text-lg">🏪</span>
                 </div>
                 <span className={`text-xs font-medium text-center leading-tight ${
-                  selectedCategory === null ? 'text-white font-bold' : 'text-white'
-                }`} style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.7)' }}>
+                  selectedCategory === null 
+                    ? (isHeaderSticky ? 'text-green-600 font-bold' : 'text-white font-bold')
+                    : (isHeaderSticky ? 'text-gray-700' : 'text-white')
+                }`} style={{ textShadow: isHeaderSticky ? 'none' : '1px 1px 2px rgba(0,0,0,0.7)' }}>
                   All
                 </span>
                 {selectedCategory === null && (
-                  <div className="w-6 h-0.5 bg-white mt-1 rounded-full"></div>
+                  <div className={`w-6 h-0.5 mt-1 rounded-full ${isHeaderSticky ? 'bg-green-600' : 'bg-white'}`}></div>
                 )}
               </button>
 
@@ -217,12 +219,14 @@ const DynamicHeader = ({ onProfileClick }: DynamicHeaderProps) => {
                     )}
                   </div>
                   <span className={`text-xs font-medium text-center leading-tight ${
-                    selectedCategory === category.category_id ? 'text-white font-bold' : 'text-white'
-                  }`} style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.7)' }}>
+                    selectedCategory === category.category_id 
+                      ? (isHeaderSticky ? 'text-green-600 font-bold' : 'text-white font-bold')
+                      : (isHeaderSticky ? 'text-gray-700' : 'text-white')
+                  }`} style={{ textShadow: isHeaderSticky ? 'none' : '1px 1px 2px rgba(0,0,0,0.7)' }}>
                     {category.name}
                   </span>
                   {selectedCategory === category.category_id && (
-                    <div className="w-6 h-0.5 bg-white mt-1 rounded-full"></div>
+                    <div className={`w-6 h-0.5 mt-1 rounded-full ${isHeaderSticky ? 'bg-green-600' : 'bg-white'}`}></div>
                   )}
                 </button>
               ))}

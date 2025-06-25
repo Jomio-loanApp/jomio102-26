@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import GoogleMapSelector from "@/components/GoogleMapSelector";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
@@ -20,6 +19,7 @@ const DeliveryLocationPage = () => {
   const [nicknameError, setNicknameError] = useState<string | null>(null);
   const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -30,6 +30,57 @@ const DeliveryLocationPage = () => {
       });
     } else {
       setHasLocationPermission(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Initialize map with a simple implementation
+    const initMap = () => {
+      const mapElement = document.getElementById('simple-map');
+      if (!mapElement || !window.google) return;
+
+      try {
+        const map = new window.google.maps.Map(mapElement, {
+          center: { lat: 25.9716, lng: 85.5946 },
+          zoom: 16,
+          gestureHandling: 'greedy',
+          zoomControl: true,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+        });
+
+        map.addListener('idle', () => {
+          const center = map.getCenter();
+          if (center) {
+            const lat = center.lat();
+            const lng = center.lng();
+            setSelected({ 
+              lat, 
+              lng, 
+              address: `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}` 
+            });
+          }
+        });
+
+        setMapLoaded(true);
+      } catch (error) {
+        console.error('Map initialization error:', error);
+        setMapLoaded(false);
+      }
+    };
+
+    if (window.google && window.google.maps) {
+      initMap();
+    } else {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q&libraries=places`;
+      script.onload = initMap;
+      script.onerror = () => {
+        console.error('Failed to load Google Maps');
+        setMapLoaded(false);
+      };
+      document.head.appendChild(script);
     }
   }, []);
 
@@ -48,8 +99,19 @@ const DeliveryLocationPage = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setSelected({ lat: latitude, lng: longitude, address: `Location at ${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
+        setSelected({ 
+          lat: latitude, 
+          lng: longitude, 
+          address: `Current location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}` 
+        });
         setHasLocationPermission(true);
+        
+        // Update map center if loaded
+        const mapElement = document.getElementById('simple-map');
+        if (mapElement && window.google) {
+          const map = new window.google.maps.Map(mapElement);
+          map.setCenter({ lat: latitude, lng: longitude });
+        }
       },
       (error) => {
         console.error('Geolocation error:', error);
@@ -59,11 +121,6 @@ const DeliveryLocationPage = () => {
           description: "Please enable location access or select a location on the map.",
           variant: "destructive",
         });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000,
       }
     );
   };
@@ -135,7 +192,6 @@ const DeliveryLocationPage = () => {
     <div className="h-screen bg-gray-50 flex flex-col">
       <Header showSearch={false} />
       
-      {/* Fixed height, non-scrolling layout */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
         {/* Top Controls Section */}
@@ -163,7 +219,6 @@ const DeliveryLocationPage = () => {
               </div>
             )}
 
-            {/* Search Input */}
             <div className="space-y-3">
               <input
                 type="text"
@@ -173,7 +228,6 @@ const DeliveryLocationPage = () => {
                 className="w-full border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
               />
               
-              {/* Use Current Location Button */}
               <Button
                 onClick={handleGetCurrentLocation}
                 variant="outline"
@@ -189,11 +243,16 @@ const DeliveryLocationPage = () => {
 
         {/* Map Section */}
         <div className="flex-1 relative">
-          <GoogleMapSelector
-            onLocationSelected={(lat, lng, address) => setSelected({ lat, lng, address })}
-            searchQuery={searchQuery}
-            onSearchQueryChange={setSearchQuery}
+          <div 
+            id="simple-map"
+            className="w-full h-full bg-gray-200"
+            style={{ minHeight: '300px' }}
           />
+          
+          {/* Fixed Pin */}
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+            <MapPin className="w-8 h-8 text-red-600 drop-shadow-lg" fill="currentColor" />
+          </div>
           
           {/* Selected Location Display */}
           {selected && (
@@ -207,12 +266,20 @@ const DeliveryLocationPage = () => {
               </div>
             </div>
           )}
+
+          {!mapLoaded && (
+            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center z-20">
+              <div className="text-center">
+                <div className="w-8 h-8 mx-auto mb-2 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                <p className="text-sm text-gray-600">Loading map...</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom Controls Section */}
         <div className="flex-shrink-0 bg-white border-t p-4">
           <div className="max-w-2xl mx-auto space-y-4">
-            {/* Address Nickname Input */}
             {showNicknameField && (
               <div>
                 <label htmlFor="address-nickname" className="block text-sm font-medium text-gray-700 mb-2">
@@ -233,7 +300,6 @@ const DeliveryLocationPage = () => {
               </div>
             )}
             
-            {/* Confirm Button */}
             <Button
               className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
               size="lg"

@@ -12,27 +12,6 @@ interface GoogleMapSelectorProps {
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyDUMzd5GLeuk4sQ85HhxcyaJQdfZpNry_Q";
 
-const loadGoogleMaps = (callback: () => void) => {
-  if (window.google && window.google.maps) {
-    callback();
-    return;
-  }
-
-  const scriptId = "google-maps-script";
-  if (document.getElementById(scriptId)) {
-    (window as any).initMapCallback = callback;
-    return;
-  }
-
-  (window as any).initMapCallback = callback;
-  const script = document.createElement("script");
-  script.id = scriptId;
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=initMapCallback&loading=async`;
-  script.async = true;
-  script.defer = true;
-  document.body.appendChild(script);
-};
-
 const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
   onLocationSelected,
   initialLat = 25.9716,
@@ -43,56 +22,30 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
   const mapRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
   const [address, setAddress] = useState("");
-  const mapInstanceRef = useRef<any>(null);
-  const autocompleteRef = useRef<any>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    loadGoogleMaps(() => {
-      if (!mapRef.current) return;
+    const initMap = () => {
+      if (!mapRef.current || !window.google) return;
 
       try {
-        // Initialize map with single-finger pan enabled
-        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+        const map = new window.google.maps.Map(mapRef.current, {
           center: { lat: initialLat, lng: initialLng },
           zoom: 16,
           disableDefaultUI: true,
           zoomControl: true,
-          gestureHandling: 'greedy', // Enable single-finger pan
+          gestureHandling: 'greedy',
           clickableIcons: false,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
         });
 
-        // Set up search autocomplete if search input exists
-        if (searchInputRef.current) {
-          autocompleteRef.current = new window.google.maps.places.Autocomplete(
-            searchInputRef.current,
-            {
-              fields: ['geometry', 'formatted_address', 'name'],
-            }
-          );
-
-          autocompleteRef.current.addListener("place_changed", () => {
-            const place = autocompleteRef.current.getPlace();
-            if (place.geometry && place.geometry.location) {
-              const lat = place.geometry.location.lat();
-              const lng = place.geometry.location.lng();
-              mapInstanceRef.current.setCenter({ lat, lng });
-              mapInstanceRef.current.setZoom(16);
-              handlePositionChange(lat, lng);
-            }
-          });
-        }
-
         let debounceTimeout: NodeJS.Timeout;
 
-        // Use map idle event for "fixed pin" interaction
-        mapInstanceRef.current.addListener("idle", () => {
+        map.addListener("idle", () => {
           clearTimeout(debounceTimeout);
           debounceTimeout = setTimeout(() => {
-            const center = mapInstanceRef.current.getCenter();
+            const center = map.getCenter();
             if (center) {
               const lat = center.lat();
               const lng = center.lng();
@@ -101,34 +54,31 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
           }, 300);
         });
 
-        // Initial address lookup
         handlePositionChange(initialLat, initialLng);
         setIsReady(true);
       } catch (error) {
         console.error('Error initializing Google Maps:', error);
         setIsReady(false);
       }
-    });
+    };
+
+    if (window.google && window.google.maps) {
+      initMap();
+    } else {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+      script.onload = initMap;
+      script.onerror = () => {
+        console.error('Failed to load Google Maps');
+        setIsReady(false);
+      };
+      document.head.appendChild(script);
+    }
 
     return () => {
-      // Clean up map instance
-      if (mapInstanceRef.current) {
-        try {
-          mapInstanceRef.current = null;
-        } catch (error) {
-          console.error('Error cleaning up map:', error);
-        }
-      }
       setIsReady(false);
     };
   }, []);
-
-  // Handle external search query changes
-  useEffect(() => {
-    if (searchInputRef.current && searchQuery !== searchInputRef.current.value) {
-      searchInputRef.current.value = searchQuery;
-    }
-  }, [searchQuery]);
 
   const handlePositionChange = async (lat: number, lng: number) => {
     if (window.google && window.google.maps) {
@@ -147,24 +97,8 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
     }
   };
 
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (onSearchQueryChange) {
-      onSearchQueryChange(value);
-    }
-  };
-
   return (
     <div className="relative h-full w-full">
-      {/* Hidden search input for autocomplete */}
-      <input
-        ref={searchInputRef}
-        type="text"
-        onChange={handleSearchInputChange}
-        className="absolute -top-10 left-0 opacity-0 pointer-events-none"
-        tabIndex={-1}
-      />
-
       {/* Map Container */}
       <div ref={mapRef} className="h-full w-full relative">
         {/* Fixed Pin in Center */}
@@ -172,7 +106,6 @@ const GoogleMapSelector: React.FC<GoogleMapSelectorProps> = ({
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-full z-20 pointer-events-none">
             <div className="relative">
               <MapPin className="text-red-600 w-8 h-8 drop-shadow-lg" fill="currentColor" />
-              {/* Pulsing dot at pin base */}
               <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
             </div>
           </div>

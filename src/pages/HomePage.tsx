@@ -65,34 +65,10 @@ const HomePage = () => {
     }
   }
 
-  const getHeaderStyle = () => {
-    if (!headerBackground) return {}
-    
-    if (headerBackground.background_image_url) {
-      return {
-        backgroundImage: `url(${headerBackground.background_image_url})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }
-    }
-    
-    if (headerBackground.background_color_hex) {
-      return {
-        backgroundColor: headerBackground.background_color_hex
-      }
-    }
-    
-    return {}
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Single parent container for header background */}
-      <div 
-        className="relative w-full"
-        style={getHeaderStyle()}
-      >
+      <div className="relative w-full">
         {/* Desktop-constrained header content */}
         <div className="w-full max-w-screen-xl mx-auto">
           <DynamicHeader onProfileClick={handleProfileClick} />

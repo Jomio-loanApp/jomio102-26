@@ -1,6 +1,5 @@
 
-import { Capacitor } from '@capacitor/core'
-import { CapacitorHttp } from '@capacitor/core'
+import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import { supabase } from '@/lib/supabase'
 
 // Platform-aware API service that handles both web and native environments

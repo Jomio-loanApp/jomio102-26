@@ -1,0 +1,14 @@
+{
+  "appId": "app.lovable.eb953f85a7d44c559bdbe63a19cec271",
+  "appName": "jomio102-26",
+  "webDir": "dist",
+  "server": {
+    "url": "https://eb953f85-a7d4-4c55-9bdb-e63a19cec271.lovableproject.com?forceHideBadge=true",
+    "cleartext": true
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
